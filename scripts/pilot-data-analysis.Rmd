@@ -1,0 +1,144 @@
+---
+title: "pilot-data-analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r analysis-preferences}
+rm(list = ls())
+RESET_MODELS = F # switch on/off whether models that are used to analyze data are re-run
+```
+
+```{r libraries}
+# clean all cached data
+rm(list = ls()) 
+
+library(dplyr)
+library(tidyverse) 
+library(magrittr)
+library(ggplot2)
+library(gridExtra)
+library(lmerTest)
+library(emmeans)
+library(scales)
+library(performance)
+library(stringr)
+library(paletteer)
+library(simr)
+library(effectsize)
+library(sjPlot)
+```
+
+```{r load data, echo=FALSE}
+
+pilot.df <- read.csv(file = "../data/pilot_2subj.csv")
+
+pilot.df <- pilot.df %>%
+  rename(ID = 'Participant.Private.ID') %>%
+  rename(stim = 'Spreadsheet..stim') %>%
+  rename(block = 'Spreadsheet..randomized_trial')
+
+pilot.df <- pilot.df %>%
+  rename_with(~gsub("Spreadsheet..", "", .x))
+
+pilot.df <- pilot.df %>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = ifelse(Response == "d", 0, 1))
+
+```
+
+```{r check catch trial, echo=FALSE}
+
+catch.df <- pilot.df %>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  filter(word == "catch") %>%
+  mutate(
+    catch = case_when(
+      str_detect(stim, "left")  ~ left,
+      str_detect(stim, "right") ~ right,
+      TRUE ~ NA_character_
+    ))%>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))
+
+
+catch.acc <- catch.df %>% 
+  filter(stim %in% c("pleft_ame.mp3", "pright_ame.mp3")) %>%
+  group_by(ID) %>%
+  summarise(acc = mean(catch.corr, na.rm = TRUE))
+
+```
+
+```{r sanity check for the main dataset, echo=FALSE}
+
+main.df <- pilot.df %>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  filter(word != "catch")
+
+#check the number of participants for each spreadsheet
+main.df.sum1 <- main.df %>%
+  group_by(Current.Spreadsheet) %>%
+  summarise(n_participants = n_distinct(ID))
+
+#check the number of trials for each spreadsheet
+main.df.sum2 <- main.df %>%
+  group_by(Current.Spreadsheet) %>%
+  tally()
+
+#check the number of distinct stimuli for each spreadsheet
+#critical trial: 3 word pair*23 steps = 69
+main.df.sum3 <- main.df %>%
+  group_by(Current.Spreadsheet) %>%
+  summarise(n_stim = n_distinct(stim))
+
+#check the repetition number of each stimuli in each spreadsheet
+main.df.sum4 <- main.df %>%
+  group_by(Current.Spreadsheet, stim) %>%
+  tally()
+
+#check trial distribution for each spreadsheet and each participant
+main.df.sum5 <- main.df %>%
+  group_by(Current.Spreadsheet, ID, word) %>%
+  tally()
+
+#check trial number in each block for each spreadsheet
+main.df.sum6 <- main.df %>%
+  group_by(Current.Spreadsheet, block) %>%
+  tally()
+
+```
+
+```{r plotting categorization curves, echo=FALSE}
+
+#base plot (group-level)
+p_base <- ggplot(main.df, aes(x = VOT, y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1) +
+  labs(x = "VOT", y = "Probability of /t/") +
+  theme_bw()
+
+p_base
+
+
+#different subset visualization
+
+#by subject
+p_by_subj <- p_base + facet_wrap(~ID)
+p_by_subj
+
+#by continuum
+p_by_word <- p_base + aes(color = word) + facet_wrap(~word)
+p_by_word
+
+#by block
+p_by_block <- p_base + aes(color = block) + facet_wrap(~block)
+p_by_block
+
+```
+
+

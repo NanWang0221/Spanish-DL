@@ -1,0 +1,307 @@
+---
+title: "norming-spanish"
+date: "2026-03-14"
+output:
+  pdf_document:
+    toc: true
+---
+
+```{r packages, include = FALSE}
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(lme4)
+library(magrittr)
+```
+
+
+## Exp info
+
+- Experiment design 
+
+The participants will sign a consent form, go through a headphone screening test, and then move on to the norming experiment. In this experiment,they  will go through 23 VOT steps x 4 repetitions/blocks x 3 word pairs + 12 catch trials  = 288 trials in total. Each participant hears all VOT steps across all word pairs (only within-subject). On catch trials, participants are instructed to press either left or right. 
+
+The VOT steps are as follows: -100, -50, -20, -10, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 120
+
+- Randomization
+
+The order of trials was randomized for each participant. Catch trials were distributed randomly throughout the experiment.
+
+Participants were given the opportunity to take breaks after each block. Participants took about 20 minutes to complete all the trials. For each participant, /d/-initial words were either always displayed on the left side or always displayed on the right side. Across participants, this ordering was counter-balanced. 
+
+
+## Preprocessing and exclusion
+
+- Exclusion standards:
+
+Participants who committed more than 3 errors out of the 12 catch trials will be excluded (N = 2).
+
+Participants with an average RT more than three standard deviations from the mean of the by-participant means (N = 0) will be excluded.
+
+Trials that are three SDs from the participant's mean RT were excluded from analysis (n=80) will be excluded.
+
+
+```{r preprocess, warning=FALSE}
+
+raw <- read.csv("../data/data_exp_30subj_all_tasks.csv") %>%
+  rename(ID = 'Participant.Private.ID') %>%
+  rename(stim = 'Spreadsheet..stim') %>%
+  rename(block = 'Spreadsheet..randomized_trial')%>%
+  rename(rt = 'Reaction.Time')%>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  mutate(
+    catch = case_when(
+      str_detect(stim, "left")  ~ Spreadsheet..left,
+      str_detect(stim, "right") ~ Spreadsheet..right,
+    ))%>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = ifelse(Response == "d", 0, 1))%>%
+  mutate(word = str_extract(stim, "^[^_]+" )) 
+
+raw$ID = factor(raw$ID)
+summary(raw)
+```
+
+
+
+```{r exclusion, warning=FALSE}
+
+#check timedOut trial numbers in the 2AFC task (participants with zero timedOut trial will not be included here)
+data.timeout.num <- raw %>%
+  filter(Screen == "2AFC", Response.Type == "timedOut") %>%
+  group_by(ID) %>%
+  summarise(num_timeouts = n())
+
+# check acc on catch trials, exclude two participants
+# 12 catch trials in total
+data.catch.rate <- raw %>% 
+  filter(stim %in% c("pleft_ame.mp3", "pright_ame.mp3")) %>%
+  group_by(ID) %>%
+  summarise(num_of_correct = sum(catch.corr, na.rm = TRUE))
+
+# participants with < 60% accuracy on catch trials will be removed
+data.cal.acc <- raw %>% 
+  filter(stim %in% c("pleft_ame.mp3", "pright_ame.mp3")) %>%
+  group_by(ID) %>%
+  summarise(exclude.catch = sum(catch.corr, na.rm = TRUE) < 10, .groups = "drop")
+
+data.exclude.catch <- data.cal.acc %>% 
+  filter(exclude.catch == TRUE)%>% 
+  distinct(ID)
+
+# check participant-level rt,  all qualitfied
+data.rt.part <- raw %>%
+  left_join(data.cal.acc, by = "ID") %>% 
+  filter(exclude.catch == FALSE) %>% 
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
+  group_by(ID) %>% 
+  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
+    rt.log.z = as.numeric(scale(rt.log)),
+    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
+    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
+
+data.exclude.by.part.rt <- data.rt.part %>%
+  filter(exclude.by.part.rt== TRUE)
+
+# check trial-level rt, 80 trials excluded
+data.rt.trial <- data.rt.part %>%
+  mutate(exclude.by.trial.rt = ifelse(abs(rt.log.z) > 3, TRUE, FALSE))
+
+data.exclude.by.trial.rt <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == TRUE) 
+
+
+# get clean data
+data.preprc <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == FALSE | exclude.by.part.rt == FALSE) %>%
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3")  #exclude practice trials
+
+```
+
+
+## Visualization
+
+```{r visualization}
+
+# prepare the data for plot
+data.plot <- data.preprc %>%
+  select(VOT, resp.num, ID, block, word, stim)
+
+
+# Plot the raw data for visual inspection
+p.raw <- ggplot(data.plot, aes(x = factor(ID), y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+  labs(x = "ID", y = "mean")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p.raw
+
+# plot group-level data
+p.group <- ggplot(data.plot, aes(x = VOT, y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+ geom_smooth(method = "glm", method.args = list(family = "binomial"))+
+  #geom_smooth()+
+  labs(x = "VOT", y = "probability of /t/")
+
+p.group
+
+# group by each continua
+p.group + facet_wrap(~ word) 
+
+p.group + facet_wrap(~ block) 
+
+p.group + facet_wrap(~ ID)
+
+#zoom in to participants with less typical categorization curves
+p.group %+% (data.plot %>% filter(ID == "15432624"))
+p.group %+% (data.plot %>% filter(ID == "15432784"))
+p.group %+% (data.plot %>% filter(ID == "15432616"))
+p.group %+% (data.plot %>% filter(ID == "15432579"))
+p.group %+% (data.plot %>% filter(ID == "15432590"))
+
+#remove one participant with overall response proportion around 0.5 across the whole VOT continuum
+data.preprc <- data.preprc %>% 
+  filter(ID !="15432624")
+
+```
+
+
+## Analysis
+
+Our goal is to evaluate whether categorization functions for the three minimal pairs differs a lot from each other. And one minimal pair indeed differs. 
+
+
+```{r logistic regression}
+data.preprc %<>%
+  mutate(VOT.z = as.numeric(scale(VOT)),
+  word = factor(word))
+
+model <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
+  data = data.preprc,
+  family = binomial)
+
+summary(model)
+```
+```{r VOT boundary - full data}
+m <- mean(data.preprc$VOT)
+sd <- sd(data.preprc$VOT)
+
+coef <- fixef(model)
+
+calc_VOT_boundary <- function(intercept, slope, m, sd) {
+  z_boundary <- -intercept / slope
+  VOT_boundary <- (z_boundary * sd) + m
+  return(VOT_boundary)
+}
+
+# VOT boundaries
+# dill (Baseline)
+boundary_dill <- calc_VOT_boundary(coef["(Intercept)"], coef["VOT.z"], m, sd)
+
+# din (Intercept + worddin, Slope + VOT.z:worddin)
+boundary_din  <- calc_VOT_boundary(coef["(Intercept)"] + coef["worddin"], 
+                                  coef["VOT.z"] + coef["VOT.z:worddin"], 
+                                  m, sd)
+
+# dip (Intercept + worddip, Slope + VOT.z:worddip)
+boundary_dip  <- calc_VOT_boundary(coef["(Intercept)"] + coef["worddip"], 
+                                  coef["VOT.z"] + coef["VOT.z:worddip"], 
+                                  m, sd)
+
+cat("--- VOT Boundaries (ms) from full dataset---\n")
+cat("dill: ", round(boundary_dill, 2), "ms\n")
+cat("din:  ", round(boundary_din, 2), "ms\n")
+cat("dip:  ", round(boundary_dip, 2), "ms\n")
+cat("-----------------------------------\n")
+```
+
+## Analysis - Exclude VOT steps -100, -50, and 120
+```{r plotting - subset data}
+data.preprc_subset <- data.preprc %>% 
+  filter(!(VOT %in% c(-100, -50, 120)))
+
+# prepare the data for plot
+data.plot_subset <- data.preprc_subset %>%
+  select(VOT, resp.num, ID, block, word, stim)
+
+
+# Plot the raw data for visual inspection
+p.raw_subset <- ggplot(data.plot_subset, aes(x = factor(ID), y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+  labs(x = "ID", y = "mean")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p.raw_subset
+
+# plot group-level data
+p.group_subset <- ggplot(data.plot_subset, aes(x = VOT, y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+ geom_smooth(method = "glm", method.args = list(family = "binomial"))+
+  #geom_smooth()+
+  labs(x = "VOT", y = "probability of /t/")
+
+p.group_subset
+
+# group by each continua
+p.group_subset + facet_wrap(~ word) 
+
+p.group_subset + facet_wrap(~ block) 
+
+p.group_subset + facet_wrap(~ ID)
+```
+```{r logistic regression - subset data}
+data.preprc_subset %<>%
+  mutate(VOT.z = as.numeric(scale(VOT)),
+  word = factor(word))
+
+model_subset <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
+  data = data.preprc_subset,
+  family = binomial)
+
+summary(model_subset)
+```
+```{r VOT boundary - subset data}
+m_subset <- mean(data.preprc_subset$VOT)
+sd_subset <- sd(data.preprc_subset$VOT)
+
+coef_subset <- fixef(model_subset)
+
+calc_VOT_boundary <- function(intercept, slope, m, sd) {
+  z_boundary <- -intercept / slope
+  VOT_boundary <- (z_boundary * sd) + m
+  return(VOT_boundary)
+}
+
+# VOT boundaries
+# dill (Baseline)
+subset_boundary_dill <- calc_VOT_boundary(coef_subset["(Intercept)"], coef_subset["VOT.z"], m_subset, sd_subset)
+
+# din (Intercept + worddin, Slope + VOT.z:worddin)
+subset_boundary_din  <- calc_VOT_boundary(coef_subset["(Intercept)"] + coef_subset["worddin"], 
+                                  coef_subset["VOT.z"] + coef_subset["VOT.z:worddin"], 
+                                  m_subset, sd_subset)
+
+# dip (Intercept + worddip, Slope + VOT.z:worddip)
+subset_boundary_dip  <- calc_VOT_boundary(coef_subset["(Intercept)"] + coef_subset["worddip"], 
+                                  coef_subset["VOT.z"] + coef_subset["VOT.z:worddip"], 
+                                  m_subset, sd_subset)
+
+cat("--- VOT Boundaries (ms) from subset dataset---\n")
+cat("dill: ", round(subset_boundary_dill, 2), "ms\n")
+cat("din:  ", round(subset_boundary_din, 2), "ms\n")
+cat("dip:  ", round(subset_boundary_dip, 2), "ms\n")
+cat("-----------------------------------\n")
+```
+
+
+
