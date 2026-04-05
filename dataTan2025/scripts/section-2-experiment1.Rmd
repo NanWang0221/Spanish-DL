@@ -112,7 +112,7 @@ d.test.excluded <-
 
 
 
-```{r nan analysis}
+```{r nan-analysis}
 library(lme4)
 
 d.test.excluded$resp.num <- NA
