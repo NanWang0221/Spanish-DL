@@ -12,6 +12,7 @@ library(stringr)
 library(tidyverse)
 library(lme4)
 library(magrittr)
+library(ggeffects)
 ```
 
 
@@ -118,6 +119,10 @@ data.preprc <- data.rt.trial %>%
   filter(exclude.by.trial.rt == FALSE | exclude.by.part.rt == FALSE) %>%
   filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3")  #exclude practice trials
 
+#remove one participant with flat categorization curve
+data.preprc <- data.preprc %>% 
+  filter(ID !="15432624")
+
 ```
 
 
@@ -145,7 +150,7 @@ p.group <- ggplot(data.plot, aes(x = VOT, y = resp.num)) +
   stat_summary(fun = mean, geom = "line") +
   stat_summary(fun = mean, geom = "point") +
   stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
- geom_smooth(method = "glm", method.args = list(family = "binomial"))+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))+
   #geom_smooth()+
   labs(x = "VOT", y = "probability of /t/")
 
@@ -166,16 +171,16 @@ p.group %+% (data.plot %>% filter(ID == "15432579"))
 p.group %+% (data.plot %>% filter(ID == "15432590"))
 
 #remove one participant with overall response proportion around 0.5 across the whole VOT continuum
-data.preprc <- data.preprc %>% 
-  filter(ID !="15432624")
+#(already implemented above)
+#data.preprc <- data.preprc %>% 
+#  filter(ID !="15432624")
 
 ```
 
 
-## Analysis
+## Analysis - full data
 
 Our goal is to evaluate whether categorization functions for the three minimal pairs differs a lot from each other. And one minimal pair indeed differs. 
-
 
 ```{r logistic regression}
 data.preprc %<>%
@@ -188,6 +193,98 @@ model <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
 
 summary(model)
 ```
+
+```{r group plot UPDATES}
+v_mean <- mean(data.preprc$VOT)
+v_sd   <- sd(data.preprc$VOT)
+
+full_vot_ms = seq(-100, 120, by = 0.5)
+full_vot_z = (full_vot_ms - v_mean) / v_sd
+
+
+full_pred_fixed <- ggpredict(model, 
+                       terms = c(paste0("VOT.z [", paste(full_vot_z, collapse=","), "]"), "word"))
+plot_df_fixed <- as.data.frame(full_pred_fixed)
+
+plot_df_fixed <- plot_df %>%
+  mutate(VOT_ms = (x * v_sd) + v_mean)
+
+ggplot(plot_df_fixed, aes(x = VOT_ms, y = predicted, color = group, fill = group)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2, color = NA) +
+  geom_line(size = 1.2) +
+  labs(x = "VOT (ms)", y = "Probability of /t/", title = "Group-level Categorization") +
+  theme_minimal()
+```
+```{r group plot with individual curves UPDATES}
+
+pred_random <- ggpredict(model, terms = c(paste0("VOT.z [", paste(full_vot_z, collapse=","), "]"), "word", "ID"), type = "random")
+                         
+plot_df_random <- as.data.frame(pred_random) %>%
+  mutate(VOT_ms = (x * v_sd) + v_mean)
+
+ggplot() +
+  geom_line(data = plot_df_fixed, 
+            aes(x = VOT_ms, 
+                y = predicted, 
+                color = group), 
+            size = 1.2) +
+  
+  geom_line(data = plot_df_random, 
+            aes(x = VOT_ms, 
+                y = predicted, 
+                group = interaction(facet, group)), 
+            color = "grey", alpha = 0.3, size = 0.5) +
+  
+  #coord_cartesian(xlim = c(-20, 100)) + 
+  #scale_x_continuous(breaks = seq(-20, 100, 20)) +
+  #scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = "VOT (ms)", 
+       y = "Probability of /t/ Response") +
+  facet_wrap(~group)+
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r group plot with individual-level curves}
+
+plot_grid <- expand.grid(
+  VOT = seq(-100, 120, length.out = 50),
+  word = unique(data.preprc$word),
+  ID = unique(data.preprc$ID)
+)
+
+m_orig <- mean(data.preprc$VOT)
+sd_orig <- sd(data.preprc$VOT)
+plot_grid$VOT.z <- (plot_grid$VOT - m_orig) / sd_orig
+
+#group-level prediction (fixed effects coefficients only)
+plot_grid$pred_group <- predict(model, newdata = plot_grid, type = "response", re.form = NA)
+
+p_full_group_combined <- ggplot(plot_grid) +
+  geom_line(aes(x = VOT, y = pred_group, color = word), size = 1.2) +
+  labs(x = "VOT (ms)", y = "Probability of /t/") +
+  theme_minimal()
+  #scale_y_continuous(labels = scales::percent)
+
+p_full_group_combined
+
+
+#individual-level prediction (fixed effects + random effect coefficients)
+plot_grid$pred_indiv <- predict(model, newdata = plot_grid, type = "response", re.form = NULL)
+
+p_full_group_ind <- ggplot(plot_grid) +
+  geom_line(aes(x = VOT, y = pred_group, color=word), size = 1.2) +
+  geom_line(aes(x = VOT, y = pred_indiv, group = ID), 
+            color = "grey80", alpha = 0.3, size = 0.4) +
+  facet_wrap(~ word) +
+  labs(x = "VOT (ms)", y = "Probability of /t/") +
+  theme_minimal()
+  #scale_y_continuous(labels = scales::percent)
+
+p_full_group_ind
+
+```
+
 ```{r VOT boundary - full data}
 m <- mean(data.preprc$VOT)
 sd <- sd(data.preprc$VOT)
@@ -221,7 +318,8 @@ cat("dip:  ", round(boundary_dip, 2), "ms\n")
 cat("-----------------------------------\n")
 ```
 
-## Analysis - Exclude VOT steps -100, -50, and 120
+
+## Analysis - subset data (Exclude VOT steps -100, -50, and 120)
 ```{r plotting - subset data}
 data.preprc_subset <- data.preprc %>% 
   filter(!(VOT %in% c(-100, -50, 120)))
@@ -259,6 +357,7 @@ p.group_subset + facet_wrap(~ block)
 
 p.group_subset + facet_wrap(~ ID)
 ```
+
 ```{r logistic regression - subset data}
 data.preprc_subset %<>%
   mutate(VOT.z = as.numeric(scale(VOT)),
@@ -270,6 +369,39 @@ model_subset <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
 
 summary(model_subset)
 ```
+
+```{r group plot with individual-level curves - subset data}
+
+plot_grid2 <- expand.grid(
+  VOT = seq(-20, 100, length.out = 50),
+  word = unique(data.preprc_subset$word),
+  ID = unique(data.preprc_subset$ID)
+)
+
+m_subset <- mean(data.preprc_subset$VOT)
+sd_subset <- sd(data.preprc_subset$VOT)
+plot_grid2$VOT.z <- (plot_grid2$VOT - m_subset) / sd_subset
+
+#group-level prediction (fixed effects coefficients only)
+plot_grid2$pred_group <- predict(model_subset, newdata = plot_grid2, type = "response", re.form = NA)
+
+#individual-level prediction (fixed effects + random effect coefficients)
+plot_grid2$pred_indiv <- predict(model_subset, newdata = plot_grid2, type = "response", re.form = NULL)
+
+p_subset_group_ind <- ggplot(plot_grid2) +
+  geom_line(aes(x = VOT, y = pred_group), 
+            color = "blue", size = 1.2) +
+  geom_line(aes(x = VOT, y = pred_indiv, group = ID), 
+            color = "grey80", alpha = 0.3, size = 0.4) +
+  facet_wrap(~ word) +
+  labs(x = "VOT (ms)", y = "Probability of /t/") +
+  theme_minimal()
+  #scale_y_continuous(labels = scales::percent)
+
+p_subset_group_ind
+
+```
+
 ```{r VOT boundary - subset data}
 m_subset <- mean(data.preprc_subset$VOT)
 sd_subset <- sd(data.preprc_subset$VOT)
