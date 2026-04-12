@@ -1,7 +1,7 @@
 ```{r, stand-alone-preamble}
 require(tidyverse)
 require(magrittr)
-
+require(ggeffects)
 require(brms)
 require(tidybayes)
 require(MVBeliefUpdatr)
@@ -124,6 +124,10 @@ table(d.test.excluded$resp.num, useNA = "ifany")
 d.test.excluded %<>%
   mutate(Item.VOT.z = as.numeric(scale(Item.VOT)))
 
+d.test.excluded$ParticipantID <- as.factor(d.test.excluded$ParticipantID)
+d.test.excluded <- d.test.excluded |> 
+  filter(ParticipantID != "23")
+
 model <- glmer(
   resp.num ~ Item.VOT.z * Item.MinimalPair + (1 + Item.VOT.z | ParticipantID),
   data = d.test.excluded,
@@ -181,14 +185,73 @@ cat("Estimated VOT boundary for diptip:", round(boundary_diptip, 2), "ms\n")
 cat("Estimated VOT boundary for dintin:", round(boundary_dintin, 2), "ms\n")
 
 ```
+```{r a quick check on individual curves}
+
+ggplot(d.test.excluded, aes(x = Item.VOT, y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+  geom_smooth(method = "glm", method.args = list(family = "binomial"))+
+  facet_wrap(~ParticipantID)+
+  labs(x = "VOT", y = "probability of /t/")
+
+```
 
 ```{r nan-plot}
 
-ggplot(d.test.excluded, aes(x = Item.VOT, y = resp.num, color = Item.MinimalPair)) +
-  geom_point() +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) 
-```
+#ggplot(d.test.excluded, aes(x = Item.VOT, y = resp.num, color = Item.MinimalPair)) +
+#  geom_point() +
+#  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) 
 
+#Will: use ggpredict instead to take random effects into account
+full_vot_ms = seq(-100, 130, by = 0.5)
+full_vot_z = (full_vot_ms - m) / sd
+
+full_pred_fixed <- ggpredict(model, 
+                       terms = c(paste0("Item.VOT.z [", paste(full_vot_z, collapse=","), "]"), "Item.MinimalPair"), 
+                       type = "fixed")
+plot_df_fixed <- as.data.frame(full_pred_fixed)
+
+plot_df_fixed <- plot_df_fixed %>%
+  mutate(VOT_ms = (x * sd) + m)
+
+ggplot(plot_df_fixed, aes(x = VOT_ms, y = predicted, color = group, fill = group)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.1, color = NA) +
+  geom_line(size = 1.2) +
+  labs(x = "VOT (ms)", y = "Probability of /t/", title = "Group-level Categorization") +
+  theme_minimal()
+
+```
+```{r group plot overlaid with individual curves}
+
+pred_random <- ggpredict(model, terms = c(paste0("Item.VOT.z [", paste(full_vot_z, collapse=","), "]"), "Item.MinimalPair", "ParticipantID"), type = "random")
+                         
+plot_df_random <- as.data.frame(pred_random) %>%
+  mutate(VOT_ms = (x * sd) + m)
+
+ggplot() +
+  geom_line(data = plot_df_fixed, 
+            aes(x = VOT_ms, 
+                y = predicted, 
+                color = group), 
+            size = 1.2) +
+  
+  geom_line(data = plot_df_random, 
+            aes(x = VOT_ms, 
+                y = predicted, 
+                group = interaction(facet, group)), 
+            color = "grey", alpha = 0.3, size = 0.5) +
+  
+  #coord_cartesian(xlim = c(-20, 100)) + 
+  #scale_x_continuous(breaks = seq(-20, 100, 20)) +
+  #scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = "VOT (ms)", 
+       y = "Probability of /t/ Response") +
+  facet_wrap(~group, axes = "all")+
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
 
 
 
