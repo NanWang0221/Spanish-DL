@@ -215,6 +215,44 @@ ggplot(plot_df_fixed, aes(x = VOT_ms, y = predicted, color = group, fill = group
   labs(x = "VOT (ms)", y = "Probability of /t/", title = "Group-level Categorization") +
   theme_minimal()
 ```
+```{r group-level categorization curve - full data}
+model_with_word_randintercept <- glmer(
+  resp.num ~ VOT.z + (1 + VOT.z | ID) + (1 | word), 
+  data = data.preprc, 
+  family = binomial
+)
+
+allword_full_pred_fixed <- ggpredict(model_with_word_randintercept, 
+                       terms = c(paste0("VOT.z [", paste(full_vot_z, collapse=","), "]"), "word"))
+
+allword_plot_df_fixed <- as.data.frame(allword_full_pred_fixed) %>%
+  group_by(x) %>%
+  summarize(
+    predicted = mean(predicted),
+    conf.low = min(conf.low),
+    conf.high = max(conf.high)
+  ) %>%
+  mutate(VOT_ms = (x * v_sd) + v_mean)
+
+ggplot(allword_plot_df_fixed, aes(x = VOT_ms, y = predicted)) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), 
+              fill = "grey80", alpha = 0.4) +
+  geom_line(size = 1.2, color = "black") +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "red", alpha = 0.5) +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(
+    x = "VOT (ms)", 
+    y = "Probability of /t/ Response",
+    title = "Overall Categorization Curve (Averaged across words)"
+  ) +
+  theme_minimal()
+
+ggplot(data.preprc, aes(x = VOT, y = as.numeric(as.character(resp.num)))) +
+  geom_jitter(height = 0.05, alpha = 0.1) + 
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), color = "red") +
+  labs(title = "Raw Data Overall Trend", y = "Probability of /t/")
+
+```
 
 ```{r group plot overlaid with individual curves - full data}
 
