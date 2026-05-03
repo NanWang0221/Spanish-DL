@@ -1,0 +1,11 @@
+Filename	phoneme	Duration (ms.)
+din_1	prevoicing	92.103
+din_2	prevoicing	87.378
+din_3	prevoicing	99.171
+din_4	prevoicing	111.697
+din_5	prevoicing	131.310
+tin_1	vot	88.225
+tin_2	vot	70.527
+tin_3	vot	74.301
+tin_4	vot	76.516
+tin_5	vot	72.565

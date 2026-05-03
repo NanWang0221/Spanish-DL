@@ -1,0 +1,11 @@
+Filename	phoneme	Duration (ms.)
+dill_1	prevoicing	79.946
+dill_2	prevoicing	132.748
+dill_3	prevoicing	77.401
+dill_4	prevoicing	100.154
+dill_5	prevoicing	116.914
+till_1	vot	108.463
+till_2	vot	80.408
+till_3	vot	73.155
+till_4	vot	77.568
+till_5	vot	93.895

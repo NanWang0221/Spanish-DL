@@ -1,0 +1,358 @@
+---
+title: "tracker"
+author: "Nan"
+date: "2026-01-19"
+output: html_document
+---
+
+
+```{r packages echo=FALSE}
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(lme4)
+library(magrittr)
+knitr::opts_chunk$set(warning = FALSE)
+
+```
+
+
+
+
+
+# create stimuli for VOT continuum
+
+The process takes a voiced token and progressively deletes its vowel onset and replaces it with an approximately equivalent amount of onset taken from the word’s voiceless minimal-pair counterpart.
+
+1.  Choose the word: bill/pill
+
+2.  Annotate the repeitions of /b/, /p/ sounds to get a regression model for it
+
+• Include negative VOT into the regression model
+
+• Exclude pre-voicing from the first 25% of vowel duration
+
+\todoNW{double check VOT is calculated separately}
+
+
+```{r regression}
+
+
+#df <- read.csv('../stimuli/recorded/speech-recording-b-p/resultsfile.txt')
+df <- read.table( "../stimuli/recorded/speech-recording-b-p/resultsfile.txt", header = TRUE, sep = "\t")
+
+#load vot
+vot <- read.csv("../stimuli/recorded/speech-recording-b-p/vot-f0.csv") %>%
+  select(files, VOT_ms)%>%
+  #modify files to change from xx.wav to xx
+  mutate(files = gsub(".wav", "", files))%>%
+  #change colunmn name
+  rename(Filename = files)
+
+
+#merge vot into df
+df <- merge(df, vot, by = "Filename")
+
+# only include Filename starts with Bill or Pill
+bpill <- df %>%
+  filter(grepl("^bill|^pill", Filename))
+
+bpill
+```
+> summary(bpill$f0_25._mean)
+  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  98.07  105.78  107.21  108.60  112.26  118.63 
+
+```{r regression model}
+
+# run regression
+model <- lm(f0_25._mean ~ VOT_ms, data = bpill)
+
+# predict F0 at VOT = 130ms
+predict(model, newdata = data.frame(VOT_ms = 130))
+predict(model, newdata = data.frame(VOT_ms = 0))
+
+
+```
+
+result: 116.8766 for 130 ms VOT
+
+
+
+3.  Select the base token to make the sound material:
+
+• Speaker_Reinaldo
+
+• Visual inspection (just for double check, which is typical in Spanish-accented English?): 1) All voiced sounds have prevoicing, 2) Voiceless sounds are less aspirated than English
+
+• Evaluate naturalness: they all sound quite natural for me, but I chose the following two: 1) Bill_bk10 (shorter prevoicing), 2) Pill_bk8 (long VOT)
+
+4.  Make the sound continuum for positive onset
+
+\todoNW{i think we use cut-back here, use cut-back once again}
+
+
+• cut back silent part from the sound
+
+• For each minimal pair a continuum of 27 tokens was generated between 0ms and 130ms with a step-size of 5ms.
+
+• Method of choosing aspiration: I chose from original words instead
+
+• Min and max F0 onset: 109.22 – 113.87 (using absolute Hz)
+
+Will's set up: dill/till (105.7Hz and 110.7 Hz), din/tin(107Hz and 112.2Hz), and dip/tip(103.6Hz and 108.9 Hz). The differences between the two endpoints are around 5-6Hz, which is similar to Tan & Jaeger's setup (246Hz and 252Hz)
+
+\todoNW{faiil to predict at 0ms}
+
+• F0 time range: 75 (default)
+
+• F0 manipulation: relative to original F0
+
+• VOT and F0 covariance: covary the two in tandem
+
+• Vowel cut-back ratio: 0.33
+
+• Aspiration intensity: 6 dB (the default; lowered by 6dB at Step 1 and gradually interpolated to increase till no attenuation at Step N); Attenuation of the aspiration continua in this experiment was made over 21 steps (0-100ms) which resulted in a range of 55.5 dB to 60.5 dB.
+
+\todoNW{the start of burst; the end of aspiration, vowel duration excludes prevoicing}
+
+5.  Make the sound continuum for negative onset
+
+• Excise a sgement with clean-up prevoicing, note down its duration (-8.8ms)
+
+• For 50ms pre-voicing from a 30ms sample: factor = 50/30 = 1.67, should be the duration factor (5.68 in my case)
+
+• Take the corresponding time-scaled pre-voicing segment.
+
+• Prepend it to the onset of the 0-ms VOT token.
+
+
+\todoNW{Dr.VOT, check it up}
+\todoNW{clean up blank before combining prevoicing to 0ms token}
+
+
+6. rename files
+
+```{r}
+setwd('/Users/nwang40/Documents/Gitrepo/tan-jaeger/stimuli/d-t/dip_tip/!final VOT continuum_selected')
+files <- list.files(pattern = "^dip_.*\\.wav$")
+
+nums <- as.numeric(sub("^dip_(-?\\d+)\\.wav$", "\\1", files))
+keep <- nums >= 0 & nums <= 27
+files <- files[keep]
+nums <- nums[keep]
+
+new_files <- paste0("dip_+", nums * 5 - 5, ".wav")
+
+data.frame(old = files, new = new_files)
+
+file.rename(files, new_files)
+
+```
+
+
+
+# Norming experiment
+
+
+```{r sound steps}
+
+
+nums <- c(-100, -50, -20, -10, 0, 5, 10, 15, 20, 25, 30, 35, 40,
+          45, 50, 55, 60, 65, 70, 80, 90, 100, 120)
+
+files <- paste0("dill_", nums, ".wav")
+
+```
+
+
+- experiment design 
+
+The participants will sign a consent form, go through a headphone screening test, and then move on to the norming experiment. In this experiment,they  will go through 23 VOT steps x 4 repetition/blocks x 3 word pair + 12 catch trials  = 288 trials in total. Each participant hears all VOT steps across all word pairs (only within-subject). On catch trials, participants are instructed to press either left or right. 
+
+The VOT steps are as follows: -100, -50, -20, -10, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 120
+
+- randomization
+
+The order of trials was randomized for each participant. Catch trials were distributed randomly throughout the experiment.
+
+Participants were given the opportunity to take breaks after each block. Participants took about 20 minutes to complete all the trials. For each participant, /d/-initial words were either always displayed on the left side or always displayed on the right side. Across participants, this ordering was counter-balanced. 
+
+
+```{r preprocess}
+
+raw <- read.csv("../norming-exp/data/data_exp_30subj_all_tasks.csv") %>%
+  rename(ID = 'Participant.Private.ID') %>%
+  rename(stim = 'Spreadsheet..stim') %>%
+  rename(block = 'Spreadsheet..randomized_trial')%>%
+  rename(rt = 'Reaction.Time')%>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  mutate(
+    catch = case_when(
+      str_detect(stim, "left")  ~ Spreadsheet..left,
+      str_detect(stim, "right") ~ Spreadsheet..right,
+    ))%>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = ifelse(Response == "d", 0, 1))%>%
+  mutate(word = str_extract(stim, "^[^_]+" )) 
+
+```
+
+- Exclusions
+
+Participants who committed more than 3 errors out of the 12 catch trials will be excluded (N = 2).
+
+Participants with an average RT more than three standard deviations from the mean of the by-participant means (N = 0) will be excluded.
+
+Trials that are three SDs from the participant's mean RT were excluded from analysis (N=) will be excluded
+
+```{r catch trials}
+# check acc on catch trials, exclude two participants
+data.cal.acc <- raw %>% 
+  filter(stim %in% c("pleft_ame.mp3", "pright_ame.mp3")) %>%
+  group_by(ID) %>%
+  summarise(exclude.catch = sum(catch.corr, na.rm = TRUE) < 10, .groups = "drop")
+
+data.exclude.catch <- data.cal.acc %>% 
+  filter(exclude.catch == TRUE)%>% 
+  distinct(ID)
+
+# check participant-level rt,  all qualitfied
+data.rt.part <- raw %>%
+  left_join(data.cal.acc, by = "ID") %>% 
+  filter(exclude.catch == FALSE) %>% 
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
+  group_by(ID) %>% 
+  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
+    rt.log.z = as.numeric(scale(rt.log)),
+    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
+    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
+
+data.exclude.by.part.rt <- data.rt.part %>%
+  filter(exclude.by.part.rt== TRUE)
+
+# check trial-level rt, 80 trials excluded
+data.rt.trial <- data.rt.part %>%
+  mutate(exclude.by.trial.rt = ifelse(abs(rt.log.z) > 3, TRUE, FALSE))
+
+data.exclude.by.trial.rt <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == TRUE) 
+
+
+# get clean data
+data.preprc <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == FALSE | exclude.by.part.rt == FALSE) %>%
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3")  #exclude practice trials
+
+```
+
+
+
+```{r visualization}
+
+# prepare the data for plot
+data.plot <- data.preprc %>%
+  select(VOT, resp.num, ID, block, word, stim)
+
+
+# Plot the raw data for visual inspection
+p.raw <- ggplot(data.plot, aes(x = factor(ID), y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+  labs(x = "ID", y = "mean")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p.raw
+
+# plot group-level data
+p.group <- ggplot(data.plot, aes(x = VOT, y = resp.num)) +
+  stat_summary(fun = mean, geom = "line") +
+  stat_summary(fun = mean, geom = "point") +
+  stat_summary(fun.data = mean_se, geom = "errorbar", width = 1)+
+  geom_smooth()+
+  labs(x = "VOT", y = "probability of /t/")
+
+p.group
+
+# group by each continua
+p.group + facet_wrap(~ word) 
+
+p.group + facet_wrap(~ block) 
+
+```
+Our goal is to evaluate whether categorization functions for the three minimal pairs differs a lot from each other. 
+
+```{r logistic regression}
+
+
+data.preprc %<>%
+  mutate(VOT.z = as.numeric(scale(VOT)),
+  word = factor(word))
+
+model <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
+  data = data.preprc,
+  family = binomial)
+
+summary(model)
+```
+
+
+
+
+
+
+
+
+## Stimulus inventory
+
+Tan stimuli: 
+
+- 4 word pair (dill–till, 1din–tin, dip–tip); VOT continua from −100 ms to +130 ms (5ms step size)
+
+- 3 exposure blocks (54 trials each); 6 test blocks (12 trials each) = 234 trials in general
+
+- In each exposure block: (1) 24/d/ and 24/t/ trials forming distributions over VOT, as well as 6 catch trials; (2) half of the /d/ and half of the /t/ trials in each exposure block were labeled, and the other half were unlabeled.
+
+- In each test block: (1) trials are identical within and across conditions, but randomized; (2) 12 VOT values: −5, 5, 15, 25, 30, 35, 40, 45, 50, 55, 65, 70 ms
+
+- 36 exposure-test combinations: 4 tests x 3 exposure conditions x 3 Latin square-designed block orders
+
+
+Our stimuli: 
+
+- 30 VOT x 3 word pair (dill/till, din/tin, dip/tip) 
+
+
+# Experiment design
+
+## Trial structure
+
+Each trial started with a dark-shaded green fixation dot being displayed. 
+
+At 500 ms from trial onset, two minimal pair words appeared on the screen. 
+
+At 1000 ms from trial onset, the fixation dot would turn bright green and participants had to click on the dot to play the recording.(This was meant to reduce trial-to-trial correlations by resetting the mouse pointer to the center of the screen at the start of each trial.)
+
+
+## Experiment structure
+
+Pass a headphone test in order to continue (Woods, Siegel, Traer, & McDermott, 2017).
+
+Take breaks every 60 trials.
+
+Completed an exit survey and an optional demographics survey.
+
+
+# Counterbalancing and randomization
+
+Within each test block: fixed, not randomized across participants;
+
+Within each exposure block: three VOT assignment randomized across participants.
+
+
+
+#
+

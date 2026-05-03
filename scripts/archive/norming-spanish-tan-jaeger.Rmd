@@ -1,0 +1,242 @@
+---
+title: "norming-spanish"
+date: "2026-03-14"
+output:
+  pdf_document:
+    toc: true
+---
+
+```{r packages, include = FALSE}
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(lme4)
+library(magrittr)
+
+theme_set(theme_bw())
+
+```
+
+
+## Exp info
+
+- Experiment design 
+
+The participants will sign a consent form, go through a headphone screening test, and then move on to the norming experiment. In this experiment,they  will go through 23 VOT steps x 4 repetitions/blocks x 3 word pairs + 12 catch trials  = 288 trials in total. Each participant hears all VOT steps across all word pairs (only within-subject). On catch trials, participants are instructed to press either left or right. 
+
+The VOT steps are as follows: -100, -50, -20, -10, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 80, 90, 100, 120
+
+- Randomization
+
+The order of trials was randomized for each participant. Catch trials were distributed randomly throughout the experiment.
+
+Participants were given the opportunity to take breaks after each block. Participants took about 20 minutes to complete all the trials. For each participant, /d/-initial words were either always displayed on the left side or always displayed on the right side. Across participants, this ordering was counter-balanced. 
+
+
+## Preprocessing and exclusion
+
+- Exclusion standards:
+
+Participants who committed more than 3 errors out of the 12 catch trials will be excluded (N = 2).
+
+Participants with an average RT more than three standard deviations from the mean of the by-participant means (N = 0) will be excluded.
+
+Trials that are three SDs from the participant's mean RT were excluded from analysis (n=80) will be excluded.
+
+
+```{r preprocess, warning=FALSE, include = FALSE}
+
+raw <- read.csv("../norming-exp/data/data_exp_30subj_all_tasks.csv") %>%
+  rename(ID = 'Participant.Private.ID') %>%
+  rename(stim = 'Spreadsheet..stim') %>%
+  rename(block = 'Spreadsheet..randomized_trial')%>%
+  rename(rt = 'Reaction.Time')%>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  mutate(
+    catch = case_when(
+      str_detect(stim, "left")  ~ Spreadsheet..left,
+      str_detect(stim, "right") ~ Spreadsheet..right,
+    ))%>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = ifelse(Response == "d", 0, 1))%>%
+  mutate(word = str_extract(stim, "^[^_]+" )) 
+
+```
+
+
+
+```{r exclusion, warning=FALSE, include=FALSE}
+# check acc on catch trials, exclude two participants
+data.cal.acc <- raw %>% 
+  filter(stim %in% c("pleft_ame.mp3", "pright_ame.mp3")) %>%
+  group_by(ID) %>%
+  summarise(exclude.catch = sum(catch.corr, na.rm = TRUE) < 10, .groups = "drop")
+#summarise_at
+
+data.exclude.catch <- data.cal.acc %>% 
+  filter(exclude.catch == TRUE)%>% 
+  distinct(ID)
+
+# check participant-level rt,  all qualitfied
+data.rt.part <- raw %>%
+  left_join(data.cal.acc, by = "ID") %>% 
+  filter(exclude.catch == FALSE) %>% 
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
+  group_by(ID) %>% 
+  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
+    rt.log.z = as.numeric(scale(rt.log)),
+    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
+    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
+
+data.exclude.by.part.rt <- data.rt.part %>%
+  filter(exclude.by.part.rt== TRUE)
+
+# check trial-level rt, 80 trials excluded
+data.rt.trial <- data.rt.part %>%
+  mutate(exclude.by.trial.rt = ifelse(abs(rt.log.z) > 3, TRUE, FALSE))
+
+data.exclude.by.trial.rt <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == TRUE) 
+
+
+# get clean data
+data.preprc <- data.rt.trial %>% 
+  filter(exclude.by.trial.rt == FALSE | exclude.by.part.rt == FALSE) %>%
+  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3")  #exclude practice trials
+
+
+```
+
+
+## Plotting
+
+General principles for wrangling and plotting
+
+1. start from one data point
+
+2. start from raw data
+
+3. always include uncertainty
+
+
+```{r wrangling}
+
+# prepare the data for plot
+data.plot <- data.preprc %>%
+  select(VOT, resp.num, ID, block, word, stim, rt, rt.log)
+
+summary(data.plot)
+glimpse(data.plot)
+
+```
+### Start from single subject data
+
+As we are concerned about the difference of categorization functions of three contrasts, I made "word" a grouping variable for every plot. 
+
+Through data from the single subject, we can already see that the behavior of "din" contrast is different from that of "dip" and "dill": the number of 0, 1 response are closer to each other; (2) its overall mean is closer to 0.5, (3) its categorization curve shifts earlier  
+
+```{r visualization single subj, fig.height=3, fig.width=4}
+
+# choose 1 subject and summarise mean_resp
+data.plot %>%
+  filter(ID == '15432596')%>%
+  group_by(word, VOT)%>%
+  summarize(mean.resp.word = mean(resp.num),)
+
+data.s1 <- data.plot %>%
+  filter(ID == '15432596')
+
+# simple count the number of 0, 1 responses for each word
+p.s1.count <- ggplot(data.s1, aes(x = factor(resp.num), fill = word)) +
+  geom_bar(position = "dodge") +
+  labs(x = "response", y = "count")
+p.s1.count # d is 0
+
+# take a look at rt just in case
+p.s1.rt <- ggplot(data.s1, aes(x = factor(word), y = rt.log)) +
+  geom_point()+
+  geom_boxplot(fill = NA, outlier.alpha = .1, notch = T)+
+  labs(x = "word", y = "log rt")
+p.s1.rt # d is 0.
+
+# per subj, per word --> 69 data points each
+p.s1.resp <- ggplot(data.s1, aes(x = factor(word), y = resp.num)) +
+  stat_summary(fun.data = mean_cl_boot, geom = "pointrange", size = .2) +
+  labs(x = "word", y = "mean") 
+p.s1.resp
+
+# per subj, per vot, per word -> 4 data points each
+p.s1.vot <- ggplot(data.s1, aes(x = VOT, y = resp.num, color = word)) +
+  stat_summary(fun.data = mean_cl_boot, geom = "pointrange", size = .2) +
+  stat_summary(fun.data = mean_cl_boot, geom = "line") +
+ # geom_smooth(method = "glm", method.args = list(family = "binomial")) #avoid making the plot too crowded
+  
+ #  # ver2, no uncertainty around mean
+ #  stat_summary(fun = mean, geom = "point") +
+ # stat_summary(fun = mean, geom = "line") +
+ # geom_smooth(method = "glm", method.args = list(family = "binomial"))
+  labs(x = "word", y = "mean") 
+p.s1.vot
+
+
+  
+```
+
+
+### move to multiple subj
+
+Verify preliminary findings in multiple subjects.
+
+```{r visualization multiple subj, fig.height=3, fig.width=4}
+
+p.count = p.s1.count %+% 
+  data.plot
+p.count
+
+p.rt = p.s1.rt %+% 
+  data.plot
+p.rt
+
+p.resp = p.s1.resp %+% 
+  data.plot
+p.resp
+
+
+p.vot = p.s1.vot %+% 
+  data.plot
+p.vot
+
+
+```
+Check subject-by-subject data. 
+
+```{r each subj, fig.width=6, fig.height=16}
+p.resp+
+  facet_wrap(facets = ~ ID, ncol =3)
+```
+
+
+
+
+
+
+
+
+## Analysis
+
+Our goal is to evaluate whether categorization functions for the three minimal pairs differs a lot from each other. And one minimal pair indeed differs. 
+
+
+```{r logistic regression}
+data.preprc %<>%
+  mutate(VOT.z = as.numeric(scale(VOT)),
+  word = factor(word))
+
+model <- glmer(resp.num ~ VOT.z * word + (1 + VOT.z | ID),
+  data = data.preprc,
+  family = binomial)
+
+summary(model)
+```

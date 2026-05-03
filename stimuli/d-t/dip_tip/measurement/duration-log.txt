@@ -1,0 +1,11 @@
+Filename	phoneme	Duration (ms.)
+dip_1	prevoicing	50.476
+dip_2	vot	42.300
+dip_3	prevoicing	90.556
+dip_4	vot	33.494
+dip_5	prevoicing	64.410
+tip_1	vot	102.418
+tip_2	 vot	115.137
+tip_3	vot	84.439
+tip_4	vot	76.704
+tip_5	vot	91.232
