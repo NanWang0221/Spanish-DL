@@ -15,9 +15,7 @@ The generated sheet can be seen in /exp1 folder, where s_c1_leftd_sheet1 means t
 
 > important decision point: VOT distribution
 
-> todo: take breaks after 60 trials; add practice; add progress bar
-
-> todo: gorrila, demographic questionnaire, dill-5.wav not found, 
+> todo:  demographic questionnaire, update catch trials, update 70dB sound files
 
 
 
