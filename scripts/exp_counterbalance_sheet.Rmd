@@ -1,0 +1,378 @@
+---
+title: "exp counterbalance"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+# General information
+
+This script creates a stimuli counterbalancing list. 
+
+The generated sheet can be seen in /exp1 folder, where s_c1_leftd_sheet1 means this is for condition 1(-20ms), left button for t, sheet1 stands for one exposure-test combination (among 12 such combinations)
+
+234 trials were split into three exposure blocks (54 trials each) and six test blocks (12 trials each). Participants take breaks after every 60 trials, which was always during an exposure block. Finally, participants completed an exit survey and an optional demographics survey.
+
+> important decision point: VOT distribution
+
+> todo: take breaks after 60 trials; add practice; add progress bar
+
+> todo: gorrila, demographic questionnaire, dill-5.wav not found, 
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(magrittr)
+```
+# Test sheet for cond 1 (-20ms)
+
+Trials: 6 Test blocks, 12 each, 
+
+Test stimuli: 12 VOT (−5, 5, 15, 25, 30, 35, 40, 45, 50, 55, 65, 70 ms) * 3 pairs = 36 tokens, 
+
+Assignment of conditions: Each participant go through each block 1 (3 minimal pair * each pair present 4 times = 12 VOT locations), block 2 (3 pair * 4 times each pair) …
+
+
+```{r create test sheet}
+
+test.vot <- c(-5, 5, 15, 25, 30, 35, 40, 45, 50, 55, 65, 70)
+word.list <- c("dill", "dip", "din")
+
+s.test <- crossing(
+  VOT  = test.vot,
+  word = word.list,
+  rep      = 1:2
+) %>%
+  mutate(
+    # grouping realized through match (), every 4 consecutive VOTs share a quartet number, very clever algebra
+    quartet = ((match(VOT, test.vot) - 1) %/% 4) + 1, 
+    # convert word to integer
+    wp.idx  = match(word, word.list),   
+    # Latin-square assignmen
+    block   = ((quartet + wp.idx - 2) %% 3) + 1 + 3 * (rep - 1)
+  ) %>%
+  select(VOT, word, block) 
+
+# sanity check
+s.test %>%
+  group_by(block) %>%
+  summarise(
+    n.trials   = n(),
+    n.VOTs     = n_distinct(VOT),
+    n.dill      = sum(word == "dill")
+  )
+
+
+```
+
+# Exposure sheet (-20ms)
+
+Trials: 3 exposure blocks, 54 each (=  24/d/ + 24/t/ + 6 catch trials 2 for each pair)
+
+Test stimuli: 21 token * 3 sampling * 3 minimal pair = 189 
+
+−20 ms condition. /d/: m = 5ms, SD = 8.94;  /t/: m = 50ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling
+
+-10 ms condition. /d/: m = 15ms, SD = 8.94;  /t/: m = 60ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling
+
++20 ms condition. /d/: m = 45ms, SD = 8.94;  /t/: m = 90ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling 
+
+
+```{r create exposure sheet}
+
+exposure.vot <- seq(-20, 125, 5)
+
+# condition 1
+m.d.c1 = 5
+sd.d.c1 = 8.94
+m.t.c1 = 50
+sd.t.c1 = 16.4
+
+get.48tokens.from.vot <- function(m.d, sd.d, m.t, sd.t, seed) {
+  set.seed(seed)
+  weights.d <- dnorm(exposure.vot, mean = m.d, sd = sd.d)
+  weights.t <- dnorm(exposure.vot, mean = m.t, sd = sd.t)
+  sample.d <- sample(exposure.vot, size = 24, replace = TRUE, prob = weights.d)
+  sample.t <- sample(exposure.vot, size = 24, replace = TRUE, prob = weights.t)
+  tibble(VOT    = c(sample.d, sample.t),
+    center = rep(c("d", "t"), each = 24))
+}
+
+get.3exposures.for.each.cond <- function(m.d, sd.d, m.t, sd.t,
+                                         seed1 = 1, seed2 = 2, seed3 = 3) {
+  t1 <- get.48tokens.from.vot(m.d, sd.d, m.t, sd.t, seed1) %>% mutate(block = 1)
+  t2 <- get.48tokens.from.vot(m.d, sd.d, m.t, sd.t, seed2) %>% mutate(block = 2)
+  t3 <- get.48tokens.from.vot(m.d, sd.d, m.t, sd.t, seed3) %>% mutate(block = 3)
+  bind_rows(t1, t2, t3)
+}
+
+catch.trials <- tibble(
+  block = rep(1:3, each = 6),
+  VOT = NA_real_,
+  center = rep(c("left", "left", "left", "right", "right", "right"), times = 3),
+  condition = "c1",
+  label = rep(c(0, 1, 0, 1, 0, 1), times = 3)
+) %>%
+  mutate(word = center)
+
+# tokens.c1 <- get.3exposures.for.each.cond(m.d.c1, sd.d.c1, m.t.c1, sd.t.c1) %>% mutate(condition = "c1") %>%
+#   # counterbalance label and word pair
+#   group_by(block, center) %>%
+#   mutate(label = sample(rep(c(0, 1), each = 12))) %>%
+#   group_by(block, center, label) %>%
+#   mutate(word = sample(rep(c("dill", "dip", "din"), each = 4))) %>%
+#   ungroup()
+
+assign.label.word.to.cond <- function(m.d, sd.d, m.t, sd.t, cond.label,
+                                       seed1 = 1, seed2 = 2, seed3 = 3) {
+  get.3exposures.for.each.cond(m.d, sd.d, m.t, sd.t, seed1, seed2, seed3) %>%
+    mutate(condition = cond.label) %>%
+    group_by(block, center) %>%
+    mutate(label = sample(rep(c(0, 1), each = 12))) %>%
+    group_by(block, center, label) %>%
+    mutate(word = sample(rep(c("dill", "dip", "din"), each = 4))) %>%
+    ungroup()
+}
+
+# practice, break
+practice.break <- tibble(
+  display = c("instructions", "practice", "practice", "practice", "practice", "practice","preparation buffer", "break1", "break2", "break3", "break4", "final reminder"),
+  word = "",
+  stim = c("", "din_-15.wav", "dill_+110.wav", "dip_+105.wav", "dill_+115.wav", "din_+130.wav","","", "", "", "", "")
+)
+
+break1 <- filter(practice.break, display == "break1")
+break2 <- filter(practice.break, display == "break2")
+break3 <- filter(practice.break, display == "break3")
+break4 <- filter(practice.break, display == "break4")
+header <- filter(practice.break, display %in% c("instructions", "practice", "preparation buffer"))
+foot <-  filter(practice.break, display %in% c("final reminder"))
+
+latin.square <- function(n) {
+  outer(1:n, 1:n, function(i, j) ((i + j - 2) %% n) + 1)
+}
+testLS     <- latin.square(6)[1:4, ]
+exposureLS <- latin.square(3)
+
+# need sanity check
+sheet_stage_order <- function(test_idx, exposure_idx) {
+  t_perm <- testLS[test_idx, ]
+  e_perm <- exposureLS[exposure_idx, ]
+  stage_seq <- c(
+    paste0("test",     t_perm[1]),
+    paste0("exposure", e_perm[1]),
+    paste0("test",     t_perm[2]),
+    paste0("exposure", e_perm[2]),
+    paste0("test",     t_perm[3]),
+    paste0("exposure", e_perm[3]),
+    paste0("test",     t_perm[4]),
+    paste0("test",     t_perm[5]),
+    paste0("test",     t_perm[6])
+  )
+  match(s.c1$stage, stage_seq)   # returns 1..9 for each row
+}
+
+```
+
+
+
+```{r combine exposure and test}
+#add catch trials
+tokens.c1 <-assign.label.word.to.cond(m.d.c1, sd.d.c1, m.t.c1, sd.t.c1, "c1")
+s.c1.exposure <- bind_rows(tokens.c1, catch.trials)
+s.c1.exposure %<>% mutate(session = "exposure")
+s.test %<>% mutate(session = "test")
+
+s.c1 <- bind_rows(s.c1.exposure, s.test)%>%
+  arrange(block, session, VOT)%>%
+  mutate(
+    stage = paste0(session, block), 
+    randomized_trial = paste0(session, block), 
+    progress_bar = 234,
+    display = "phonetic categorization",
+    stim = case_when( VOT < 0    ~ paste0(word, "_",  VOT, ".wav"), VOT >= 0   ~ paste0(word, "_+", VOT, ".wav"), TRUE ~ paste0(word, ".mp3"))
+)
+
+# s.c1.addbreak <- bind_rows(
+#   header,
+#   s.c1[1:68, ],
+#   break1,
+#   s.c1[69:128, ],
+#   break2,
+#   s.c1[129:188, ],
+#   break3,
+#   s.c1[189:nrow(s.c1), ],
+#   break4,
+#   foot
+# )
+
+# sanity check the distribution of VOT within s.c1 exposure group 
+ggplot(s.c1.exposure, aes(x = VOT)) +
+  geom_histogram(binwidth = 5) +
+  facet_wrap(~block) +
+  labs(title = "VOT distribution", x = "VOT", y = "count")
+
+
+
+```
+
+3 exposure block * 4 test order * 2 left or right = 24 combinations
+
+24 combinations * 3 conditions (-20, -10, +20ms) later = 72 combinations 
+
+```{r output}
+
+s.c1.sheet <- s.c1 %>%
+  mutate(
+    sheet1  = sheet_stage_order(1, 1),
+    sheet2  = sheet_stage_order(1, 2),
+    sheet3  = sheet_stage_order(1, 3),
+    sheet4  = sheet_stage_order(2, 1),
+    sheet5  = sheet_stage_order(2, 2),
+    sheet6  = sheet_stage_order(2, 3),
+    sheet7  = sheet_stage_order(3, 1),
+    sheet8  = sheet_stage_order(3, 2),
+    sheet9  = sheet_stage_order(3, 3),
+    sheet10 = sheet_stage_order(4, 1),
+    sheet11 = sheet_stage_order(4, 2),
+    sheet12 = sheet_stage_order(4, 3)
+  )
+
+#####  left for d, output 12csv
+
+write.csv  <- function(condition, csv, left, right){
+  sheet_col <- paste0("sheet", i)
+  filename  <- paste0("/Users/nwang40/Documents/Gitrepo/Spanish-DL/exp1/s_", condition, "_left", left, "_sheet", i, ".csv")
+   trials    <- csv %>% 
+    arrange(.data[[sheet_col]]) %>% 
+    select(-starts_with("sheet"))
+  bind_rows(
+    header,
+    slice(trials,   1:60),  break1,
+    slice(trials,  61:120), break2,
+    slice(trials, 121:180), break3,
+    slice(trials, 181:nrow(trials)), break4,
+    foot
+  ) %>%
+    mutate(left = left, right = right,
+    word_display = case_when( label == 1 & left == "d" ~ paste0(word, "_leftd.jpeg"), label == 1 & left == "t" ~ paste0(word, "_leftt.jpeg"), TRUE ~ "blank.jpeg") )%>%
+    write_csv(filename, na = "")
+}
+
+
+# t, d 12 sheets separately
+for (i in 1:12){
+  write.csv("c1", s.c1.sheet, "d", "t")
+  write.csv("c1", s.c1.sheet, "t", "d")
+}
+
+
+# for (i in 1:12) {
+#   sheet_col <- paste0("sheet", i)
+#   filename  <- paste0("/Users/nwang40/Documents/Gitrepo/Spanish-DL/exp1/s_c1_leftd_sheet", i, ".csv")
+#   trials    <- s.c1.sheet %>% 
+#     arrange(.data[[sheet_col]]) %>% 
+#     select(-starts_with("sheet"))
+#   bind_rows(
+#     header,
+#     slice(trials,   1:60),  break1,
+#     slice(trials,  61:120), break2,
+#     slice(trials, 121:180), break3,
+#     slice(trials, 181:nrow(trials)), break4,
+#     foot
+#   ) %>%
+#     mutate(left = "d", right = "t",
+#     word_display = case_when( label == 1 & left == "d" ~ paste0(word, "_leftd.jpeg"), label == 1 & left == "t" ~ paste0(word, "_leftt.jpeg"), TRUE ~ "blank.jpeg") )%>%
+#     write_csv(filename, na = "")
+# }
+
+
+
+```
+
+
+
+# replicate the proces for c2 (-10ms) and c3 condition (20ms)
+
+
+
+```{r for c2}
+# condition 2 and 3
+m.d.c2 = m.d.c1 + 10
+m.t.c2 = m.t.c1 + 10
+
+tokens.c2 <-assign.label.word.to.cond(m.d.c2, sd.d.c1, m.t.c2, m.t.c1, "c2")
+s.c2.exposure <- bind_rows(tokens.c2, catch.trials)
+s.c2.exposure %<>% mutate(session = "exposure")
+s.c2 <- bind_rows(s.c2.exposure, s.test)%>%
+  arrange(block, session, VOT)%>%
+  mutate(stage = paste0(session, block), randomized_trial = paste0(session, block), stim = case_when( VOT < 0    ~ paste0(word, "_",  VOT, ".wav"), VOT >= 0   ~ paste0(word, "_+", VOT, ".wav")))
+
+s.c2.sheet <- s.c2 %>%
+  mutate(
+    sheet1  = sheet_stage_order(1, 1),
+    sheet2  = sheet_stage_order(1, 2),
+    sheet3  = sheet_stage_order(1, 3),
+    sheet4  = sheet_stage_order(2, 1),
+    sheet5  = sheet_stage_order(2, 2),
+    sheet6  = sheet_stage_order(2, 3),
+    sheet7  = sheet_stage_order(3, 1),
+    sheet8  = sheet_stage_order(3, 2),
+    sheet9  = sheet_stage_order(3, 3),
+    sheet10 = sheet_stage_order(4, 1),
+    sheet11 = sheet_stage_order(4, 2),
+    sheet12 = sheet_stage_order(4, 3)
+  )
+
+#####  output 12csv for t d separately
+
+for (i in 1:12){
+  write.csv("c2", s.c2.sheet, "d", "t")
+  write.csv("c2", s.c2.sheet, "t", "d")
+}
+
+
+```
+
+```{r for c3}
+# condition 2 and 3
+m.d.c3 = m.d.c1 + 40
+m.t.c3 = m.t.c1 + 40
+
+tokens.c3 <-assign.label.word.to.cond(m.d.c3, sd.d.c1, m.t.c3, m.t.c2, "c2")
+s.c3.exposure <- bind_rows(tokens.c3, catch.trials)
+s.c3.exposure %<>% mutate(session = "exposure")
+s.c3 <- bind_rows(s.c3.exposure, s.test)%>%
+  arrange(block, session, VOT)%>%
+  mutate(stage = paste0(session, block), randomized_trial = paste0(session, block),stim = case_when( VOT < 0    ~ paste0(word, "_",  VOT, ".wav"), VOT >= 0   ~ paste0(word, "_+", VOT, ".wav")))
+
+s.c3.sheet <- s.c3 %>%
+  mutate(
+    sheet1  = sheet_stage_order(1, 1),
+    sheet2  = sheet_stage_order(1, 2),
+    sheet3  = sheet_stage_order(1, 3),
+    sheet4  = sheet_stage_order(2, 1),
+    sheet5  = sheet_stage_order(2, 2),
+    sheet6  = sheet_stage_order(2, 3),
+    sheet7  = sheet_stage_order(3, 1),
+    sheet8  = sheet_stage_order(3, 2),
+    sheet9  = sheet_stage_order(3, 3),
+    sheet10 = sheet_stage_order(4, 1),
+    sheet11 = sheet_stage_order(4, 2),
+    sheet12 = sheet_stage_order(4, 3)
+  )
+
+#####  left for d, output 12csv
+for (i in 1:12){
+  write.csv("c3", s.c3.sheet, "d", "t")
+  write.csv("c3", s.c3.sheet, "t", "d")
+}
+
+```
+
+
+
