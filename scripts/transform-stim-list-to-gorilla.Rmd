@@ -16,13 +16,15 @@ library(tidyr)
 library(stringr)
 ```
 
-## Transform stimlist
+```{r define directories, echo=FALSE}
 
-```{r exposure block - compile new stimuli lists, echo=FALSE}
+folder_path <- "../dataTan2025/experiments/TJ2025-main-exp-counterbalanced-lists/!criticalLists/"
+output_path <- "../exp1/!new-gorilla-stimlists/exposure/"
 
-#try one list
-stimlist_df <- read.csv("../dataTan2025/experiments/TJ2025-main-exp-counterbalanced-lists/exposure-Shift0_imageSelection-backward_blockOrder-A_materials-A_block-2.csv")
-summary(stimlist_df)
+file_paths <- list.files(path = folder_path, pattern = "\\.csv$", full.names = TRUE)
+```
+
+```{r create mapping tribbles, echo=FALSE}
 
 unlabeled_left_right_options_d_left <- tribble(
   ~word,  ~left,  ~right,
@@ -72,9 +74,71 @@ all_options_d_right <- bind_rows(
   labeled_left_right_options |> mutate(category = "labeled"),
   unlabeled_left_right_options_d_right |> mutate(category = "unlabeled")
 )
+```
 
-#for d-left lists
-updated_stimlist_d_left <- stimlist_df |> 
+## Transform stimlist in a loop
+```{r tranfrom into d-left lists, echo=FALSE}
+
+for (current_file in file_paths) {
+  
+  stimlist_df <- read.csv(current_file)
+  
+  ### transform into the d-left list ###
+  updated_stimlist_d_left <- stimlist_df |> 
+    uncount(reps, .remove = FALSE) |> #expand repeated trials to separate rows
+    mutate(VOT = str_extract(filename, "(?<=VOT)-?\\d+") %>% as.numeric()) |> #create "VOT" column
+    separate(target_word, into = c("word", "label"), sep = "_", remove = FALSE) |> #create "word", "label" columns
+    mutate(trial_type = if_else(word %in% c("flare", "rare", "share"), "catch", "exposure")) |> #create "trial_type" column
+    mutate(
+      filename_word_prefix = case_when(     #set up filename prefix based on the sound files    
+        word == "till" ~ "dill",
+        word == "tin"  ~ "din",
+        word == "tip"  ~ "dip",
+        TRUE           ~ word
+      ),
+      filename = if_else(
+        trial_type == "catch",
+        paste0(word, ".wav"),                          #rename catch trial
+        paste0(filename_word_prefix, "_", VOT, ".wav") #rename exposure trial
+      )
+    ) |> 
+    mutate(
+      #rename "condition" column
+      condition = case_when(   
+        condition == "Shift0" ~ "expo-20ms",
+        condition == "Shift10"  ~ "expo-10ms",
+        condition == "Shift40"  ~ "expo+20ms"
+      )
+    ) |>
+    mutate(category = case_when(
+      #map each type of trial with corresponding left and right options
+      trial_type == "catch" ~ "catch",
+      label == "labeled"   ~ "labeled",
+      label == "unlabeled" ~ "unlabeled"
+    )) |>
+    left_join(all_options_d_left, by = c("word", "category")) |> 
+    mutate(display = "phonetic categorization") |> 
+    mutate(option_setup = "d-left") |> 
+    mutate(progress_bar = 234) |> 
+    # 移除暫時的輔助欄位
+    select(-filename_word_prefix, -target_word, -image_selection, -feedback, -reps, -category) |> 
+    select(display, trial_type, stim = filename, word, VOT, label, condition, everything())
+  
+  #save new csv files
+  condition_val_L <- unique(updated_stimlist_d_left$condition)
+  block_val_L <- unique(updated_stimlist_d_left$blockID)
+  option_setup_val_L <- unique(updated_stimlist_d_left$option_setup)
+  
+  new_filename_L <- paste0(condition_val_L, "_", block_val_L, "_", option_setup_val_L, ".csv")
+  write.csv(updated_stimlist_d_left, 
+            file = paste0("../exp1/new-gorilla-stimlists/exposure/", new_filename_L),
+            row.names = FALSE)
+  
+  print(paste("d-left file saved:", new_filename_L))
+  
+  
+  ### transform into the d-right list ###
+  updated_stimlist_d_right <- stimlist_df |> 
   uncount(reps, .remove = FALSE) |> #expand repeated trials to separate rows
   mutate(VOT = str_extract(filename, "(?<=VOT)-?\\d+") %>% as.numeric()) |> #create "VOT" column
   separate(target_word, into = c("word", "label"), sep = "_", remove = FALSE) |> #create "word", "label" columns
@@ -106,24 +170,24 @@ updated_stimlist_d_left <- stimlist_df |>
     label == "labeled"   ~ "labeled",
     label == "unlabeled" ~ "unlabeled"
   )) |>
-  left_join(all_options_d_left, by = c("word", "category")) |> 
-  mutate(display = "exposure") |> 
-  mutate(option_setup = "d-left") |> 
-  # 移除暫時的輔助欄位
+  left_join(all_options_d_right, by = c("word", "category")) |> 
+  mutate(display = "phonetic categorization") |> 
+  mutate(option_setup = "d-right") |> 
+  mutate(progress_bar = 234) |> 
   select(-filename_word_prefix, -target_word, -image_selection, -feedback, -reps, -category) |> 
-  select(display, trial_type, filename, word, VOT, label, condition, everything())
+  select(display, trial_type, stim = filename, word, VOT, label, condition, everything())
 
-#save new csv files
-condition_val <- unique(updated_stimlist_d_left$condition)
-block_val <- unique(updated_stimlist_d_left$blockID)
-option_setup_val <- unique(updated_stimlist_d_left$option_setup)
-
-new_filename <- paste0(condition_val, "_", block_val, "_", option_setup_val, ".csv")
-write.csv(updated_stimlist_d_left, 
-          file = paste0("../exp1/new-gorilla-stimlists/", new_filename),
-          row.names = FALSE)
-
-print(paste("File saved:", new_filename))
+  #save new csv files
+  condition_val_R <- unique(updated_stimlist_d_right$condition)
+  block_val_R <- unique(updated_stimlist_d_right$blockID)
+  option_setup_val_R <- unique(updated_stimlist_d_right$option_setup)
+  
+  new_filename_R <- paste0(condition_val_R, "_", block_val_R, "_", option_setup_val_R, ".csv")
+  write.csv(updated_stimlist_d_right, 
+            file = paste0("../exp1/new-gorilla-stimlists/exposure/", new_filename_R),
+            row.names = FALSE)
+  
+  print(paste("d-right file saved:", new_filename_R))
+}
 
 ```
-
