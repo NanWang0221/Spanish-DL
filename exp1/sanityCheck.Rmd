@@ -1,0 +1,44 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-05-18"
+---
+```{r}
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+
+read.expo <- function(shiftonset) {
+  base <- "!new-gorilla-stimlists/exposure/expo"
+  A <- read.csv(paste0(base, shiftonset, "_A_d-left.csv"))
+  B <- read.csv(paste0(base, shiftonset, "_B_d-left.csv"))
+  C <- read.csv(paste0(base, shiftonset, "_C_d-left.csv"))
+  bind_rows(A, B, C)
+}
+
+expo_10ms <- read.expo("-10ms") %>% mutate(shift ="-10ms" )
+expo__20ms <- read.expo("-20ms")  %>% mutate(shift ="-20ms" )
+expo_20ms <- read.expo("+20ms") %>% mutate(shift ="+20ms" )
+
+expo<-bind_rows(expo_10ms, expo__20ms,expo_20ms )
+
+```
+
+
+```{r}
+expo %>%
+  filter(!is.na(VOT)) %>%
+  mutate(cat = substr(word, 1, 1)) %>%  
+  group_by(cat, shift) %>%
+  summarise(mean.VOT = mean(VOT),
+            sd.VOT   = sd(VOT))
+
+```
+From the paper:
+
+−20 ms condition. /d/: m = 5ms, SD = 8.94;  /t/: m = 50ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling
+
+-10 ms condition. /d/: m = 15ms, SD = 8.94;  /t/: m = 60ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling
+
++20 ms condition. /d/: m = 45ms, SD = 8.94;  /t/: m = 90ms, SD = 16.4 —  24 /d/ + 24 /t/  (Half labeled, half unlabeled, 21 distinct location/token) * 3 sampling 
+
