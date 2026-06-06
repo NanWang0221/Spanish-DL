@@ -218,11 +218,11 @@ p.group + facet_wrap(~ block)
 p.group + facet_wrap(~ ID)
 
 #zoom in to participants with less typical categorization curves
-p.group %+% (data.plot %>% filter(ID == "15432624"))
-p.group %+% (data.plot %>% filter(ID == "15432784"))
-p.group %+% (data.plot %>% filter(ID == "15432616"))
-p.group %+% (data.plot %>% filter(ID == "15432579"))
-p.group %+% (data.plot %>% filter(ID == "15432590"))
+#p.group %+% (data.plot %>% filter(ID == "15432624"))
+#p.group %+% (data.plot %>% filter(ID == "15432784"))
+#p.group %+% (data.plot %>% filter(ID == "15432616"))
+#p.group %+% (data.plot %>% filter(ID == "15432579"))
+#p.group %+% (data.plot %>% filter(ID == "15432590"))
 
 #remove one participant with overall response proportion around 0.5 across the whole VOT continuum
 #(already implemented above)
