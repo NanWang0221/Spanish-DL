@@ -82,7 +82,13 @@ d.test %<>%
          # this gives each subject's mean log_RT
          Response.log_RT.mean = mean(Response.log_RT, na.rm = T), 
          # Make distributional outliers
+         ### Will: should be evaluating scale(Response.log_RT)?
+         ### scale(Response.log_RT.mean) would give only the z-score of the subject mean (which is always 0)
          Excluded.participant.due.to.mean.RT = ifelse(abs(scale(Response.log_RT.mean)) > 3, TRUE, FALSE)) 
+         ### hence no data was excluded (Excluded.participant.due.to.mean.RT has 0 observation)
+
+         ### also, the codes here seem to intend to do trial-level RT exclusion within subjects -
+         ### participant-level RT exclusion should be implemented before this through "summarise()"?
 
 excluded.participants.due.to.mean.RT <- 
   d.test %>% 
@@ -110,6 +116,15 @@ d.test.excluded <-
   mutate(Response.ProportionVoiceless = ifelse(Response.Voicing == "voiceless", 1, 0))
 ```
 
+```{r will-check RT distribution}
+
+hist(d.test.excluded$Response.RT, breaks = 50)
+#very long RT tail!
+
+table(d.test.excluded$Response.RT > 3000)
+#451/3518 = 12.8%
+
+```
 
 
 ```{r nan-analysis}
@@ -185,6 +200,7 @@ cat("Estimated VOT boundary for diptip:", round(boundary_diptip, 2), "ms\n")
 cat("Estimated VOT boundary for dintin:", round(boundary_dintin, 2), "ms\n")
 
 ```
+
 ```{r a quick check on individual curves}
 
 ggplot(d.test.excluded, aes(x = Item.VOT, y = resp.num)) +
