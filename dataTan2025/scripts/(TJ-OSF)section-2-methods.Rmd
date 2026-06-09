@@ -283,7 +283,7 @@ ggplot(d.for_analysis, aes(x = Response.RT)) +
   )
 
 table(d.for_analysis$Response.RT > 3000)
-#480/25224=0.02%
+#480/25704=1.86%
 
 table(d.for_analysis$Response.RT < 200)
 #0%
