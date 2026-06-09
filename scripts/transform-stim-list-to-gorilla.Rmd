@@ -14,8 +14,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyr)
 library(stringr)
+library(tidyverse)
 ```
 
+##exposure blocks
+# directly modify TJ2025's orignial stimuli lists (18 lists in total)
 ```{r define directories, echo=FALSE}
 
 folder_path <- "../dataTan2025/experiments/TJ2025-main-exp-counterbalanced-lists/!criticalLists/"
@@ -76,8 +79,7 @@ all_options_d_right <- bind_rows(
 )
 ```
 
-## Transform stimlist in a loop
-```{r tranfrom into d-left lists, echo=FALSE}
+```{r tranform into d-left and d-right lists, echo=FALSE}
 
 for (current_file in file_paths) {
   
@@ -191,3 +193,121 @@ for (current_file in file_paths) {
 }
 
 ```
+
+##test blocks (9 d-left, 9 d-right)
+5
+```{r define directories, echo=FALSE}
+
+test_base <- read_csv("../exp1/!new-gorilla-stimlists/test/test_stimlist.csv", show_col_types = F)
+test_output_path <- "../exp1/!new-gorilla-stimlists/test"
+
+```
+
+```{r generate a list of 6 test blocks, echo=FALSE}
+
+set.seed(1)
+vots  <- unique(test_base$VOT)  # [-5 5 15 25 30 35 40 45 50 55 65 70]
+words <- unique(test_base$word) # ["dill", "dip", "din"]
+
+d.all_generated_combinations <- tibble()
+
+#create a base template (12 VOT x 3 blocks grid)
+m_skeleton <- matrix(c(
+  "dill","dip" ,"din" ,"dill","dip" ,"din" ,"dill","dip" ,"din" ,"dill","dip" ,"din" ,
+  "dip" ,"din" ,"dill","din" ,"dill","dip" ,"din" ,"dill","dip" ,"dip" ,"din" ,"dill",
+  "din" ,"dill","dip" ,"dip" ,"din" ,"dill","dip" ,"din" ,"dill","din" ,"dill","dip"
+), nrow = 3, byrow = TRUE)
+
+
+for (ver in 1:18) {
+  
+  # ============================================================================
+  # Repetition 1 ➔ Block 1, 2, 3
+  # ============================================================================
+  col_order1 <- sample(1:12)         # shuffle the order of the 12 VOTs
+  row_order1 <- sample(1:3)          # shuffle the order of the 3 blocks
+  word_map1  <- sample(words)        # shuffle between words
+  names(word_map1) <- words
+  
+  # 執行洗牌
+  matrix_rep1 <- m_skeleton[row_order1, col_order1]
+  matrix_rep1[] <- word_map1[matrix_rep1]
+  
+  # VOT 獨立洗牌
+  shuffled_vots_rep1 <- sample(vots)
+  
+  rep1_list <- list()
+  for (b in 1:3) {
+    rep1_list[[b]] <- tibble(
+      blockID = paste0("T", b),
+      VOT     = shuffled_vots_rep1,
+      word    = matrix_rep1[b, ]
+    )
+  }
+  rep1_temptable <- bind_rows(rep1_list)
+  
+  # ============================================================================
+  # Repetition 2 ➔ Block 4, 5, 6
+  # ============================================================================
+  col_order2 <- sample(1:12)
+  row_order2 <- sample(1:3)
+  word_map2  <- sample(words)
+  names(word_map2) <- words
+  
+  matrix_rep2 <- m_skeleton[row_order2, col_order2]
+  matrix_rep2[] <- word_map2[matrix_rep2]
+  
+  shuffled_vots_rep2 <- sample(vots)
+  
+  rep2_list <- list()
+  for (b in 4:6) {
+    matrix_row <- b - 3
+    rep2_list[[b]] <- tibble(
+      blockID = paste0("T", b),
+      VOT     = shuffled_vots_rep2,
+      word    = matrix_rep2[matrix_row, ]
+    )
+  }
+  rep2_temptable <- bind_rows(rep2_list)
+  
+  #combine block 1-3 with block 4-6
+  version_complete <- bind_rows(rep1_temptable, rep2_temptable)
+  
+  # ============================================================================
+  # left join with the test_base dataset retain all the columns
+  # ============================================================================
+  version_clean <- version_complete %>%
+    left_join(test_base %>% select(-blockID), by = c("word", "VOT")) %>%
+    mutate(version = paste0("List_", ver)) %>%
+    arrange(blockID)
+  
+  d.all_generated_combinations <- bind_rows(d.all_generated_combinations, version_clean)
+}
+
+d.all_generated_combinations <- d.all_generated_combinations %>%
+  select(
+    display, trial_type, stim, word, VOT, 
+    label, condition, list_LSQ_variant, blockID,
+    everything(),
+    version
+  )
+
+#separate 18 version of the test lists
+for (i in 1:18) {
+  var_name <- paste0("List_", i) #identify certain version of the lists
+  
+  sub_table <- d.all_generated_combinations %>% 
+    filter(version == var_name) %>% #filter out certain version of the lists from the master lists
+    select(-version)
+  
+  #create 18 lists
+  assign(var_name, sub_table) 
+  
+  #save files
+  full_file_path <- file.path(test_output_path, paste0(var_name, ".csv"))
+  write.csv(sub_table, file = full_file_path, row.names = FALSE, fileEncoding = "UTF-8")
+}
+
+```
+
+
