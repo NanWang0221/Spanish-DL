@@ -310,4 +310,140 @@ for (i in 1:18) {
 
 ```
 
+```{r combine exposure and test lists, echo=FALSE}
+
+expo_folder <- "../exp1/!new-gorilla-stimlists/exposure/"
+test_folder <- "../exp1/!new-gorilla-stimlists/test/"
+output_folder <- "../exp1/!new-gorilla-stimlists/!final/"
+
+design_blueprint <- tibble(
+  list_num   = 1:18,
+  expo_cond    = rep(c("-20ms", "-10ms", "+20ms"), each = 6),
+  expo_seq   = rep(rep(c("ABC", "CAB", "BCA"), each = 2), times = 3),
+  key_resp   = rep(c("d-left", "d-right"), times = 9)
+)
+
+for (i in 1:18) {
+  
+  # 抓取當前清單的藍圖設定
+  current_cfg   <- design_blueprint %>% filter(list_num == i)
+  expo_cond     <- current_cfg$expo_cond
+  expo_seq      <- current_cfg$expo_seq
+  key_resp      <- current_cfg$key_resp
+  
+  # 🛠️ A. 讀取對應的 Test 總表 (共有 T1 ~ T6)
+  test_file_path <- file.path(test_folder, paste0("List_", i, ".csv"))
+  if (!file.exists(test_file_path)) {
+    warning(paste("cannot find:", test_file_path, "--skip"))
+    next
+  }
+  
+  test_sheet <- read_csv(test_file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character)) # 統一轉字串方便合併
+  
+  # 🛠️ B. 依據拉丁方陣順序，讀取對應的 3 張 Exposure 檔案
+  # 將 "ABC" 拆解成 c("A", "B", "C")
+  blocks_to_load <- strsplit(expo_seq, "")[[1]]
+  
+  expo_blocks <- list()
+  for (block in blocks_to_load) {
+    # 建立檔名，例如: expo-20ms_A_d-left.csv
+    # 注意：原本的 -20ms 檔名通常寫作 expo-20ms，此處用 gsub 拿掉多餘的 s 或是直接組裝
+    clean_expo_cond <- gsub("ms", "", expo_cond) # 變成 "-20", "-10", "+20"
+    expo_file_name <- paste0("expo", clean_expo_cond, "ms_", block, "_", key_resp, ".csv")
+    expo_file_path <- file.path(expo_folder, expo_file_name)
+    
+    if (file.exists(expo_file_path)) {
+      expo_blocks[[block]] <- read_csv(expo_file_path, show_col_types = FALSE) %>% 
+        mutate(across(everything(), as.character))
+    } else {
+      stop(paste("cannot find:", expo_file_path))
+    }
+  }
+  
+  #order: T1 -> Expo_1 -> T2 -> Expo_2 -> T3 -> Expo_3 -> T4 -> T5 -> T6
+  full_combined <- bind_rows(
+    test_sheet %>% filter(blockID == "T1"),
+    expo_blocks[[1]],
+    test_sheet %>% filter(blockID == "T2"),
+    expo_blocks[[2]],
+    test_sheet %>% filter(blockID == "T3"),
+    expo_blocks[[3]],
+    test_sheet %>% filter(blockID == "T4"),
+    test_sheet %>% filter(blockID == "T5"),
+    test_sheet %>% filter(blockID == "T6")
+  )
+  
+  full_combined <- full_combined %>%
+    mutate(progress_bar = "234") %>%
+    mutate(
+      block = case_when(
+        trial_type == "test" & blockID == "T1" ~ "1",
+        trial_type == "test" & blockID == "T2" ~ "3",
+        trial_type == "test" & blockID == "T3" ~ "5",
+        trial_type == "test" & blockID == "T4" ~ "7",
+        trial_type == "test" & blockID == "T5" ~ "8",
+        trial_type == "test" & blockID == "T6" ~ "9",
+        TRUE ~ as.character(block)
+      ),
+    
+      option_setup = case_when(
+        trial_type == "test" & key_resp == "d-left"  ~ "d-left",
+        trial_type == "test" & key_resp == "d-right" ~ "d-right",
+        TRUE ~ option_setup
+      ),
+      
+      t_pair = case_when(
+        word == "dill" ~ "till",
+        word == "dip"  ~ "tip",
+        word == "din"  ~ "tin",
+        TRUE ~ NA_character_
+      ),
+      
+      left = case_when(
+        trial_type == "test" & key_resp == "d-left"  ~ word,
+        trial_type == "test" & key_resp == "d-right" ~ t_pair,
+        TRUE ~ left
+      ),
+      
+      right = case_when(
+        trial_type == "test" & key_resp == "d-left"  ~ t_pair,
+        trial_type == "test" & key_resp == "d-right" ~ word,
+        TRUE ~ right
+      )
+    ) %>%
+    select(-t_pair) # 移除暫存欄位
+
+  #insert breaks after every 60 trials
+  break_row <- full_combined %>% 
+    slice(1) %>% 
+    mutate(across(everything(), ~ ""))
+  
+  break_row$display <- "break"
+  
+  final_list_with_breaks <- tibble()
+  total_rows <- nrow(full_combined) #234 trials
+  
+  for (start_idx in seq(1, total_rows, by = 60)) {
+    end_idx <- min(start_idx + 59, total_rows)
+    chunk <- full_combined %>% slice(start_idx:end_idx)
+    
+    final_list_with_breaks <- bind_rows(final_list_with_breaks, chunk)
+    
+    if (end_idx < total_rows) {
+      final_list_with_breaks <- bind_rows(final_list_with_breaks, break_row)
+    }
+  }
+  
+  output_file_name <- paste0("full_List_", i, "_expo", expo_cond, "_", expo_seq, "_", key_resp, ".csv")
+  final_output_path <- file.path(output_folder, output_file_name)
+  
+  write.csv(final_list_with_breaks, file = final_output_path, row.names = FALSE, fileEncoding = "UTF-8", na = "")
+}
+```
+
+
+
+
+
 
