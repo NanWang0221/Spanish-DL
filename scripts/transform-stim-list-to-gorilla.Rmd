@@ -413,9 +413,11 @@ for (i in 1:18) {
         trial_type == "test" & key_resp == "d-left"  ~ t_pair,
         trial_type == "test" & key_resp == "d-right" ~ word,
         TRUE ~ right
-      )
+      ),
+      
+      token_category = if_else(trial_type == "exposure", substr(word, 1, 1), NA_character_)
     ) %>%
-    select(-t_pair) # 移除暫存欄位
+    select(-t_pair)
 
   #insert breaks after every 60 trials
   break_row <- full_combined %>% 
@@ -451,7 +453,8 @@ for (i in 1:18) {
     final_list_with_breaks,
     final_row
     ) |> 
-    select(-list)
+    select(-list) %>% 
+    relocate(token_category, .after = word)
   
   output_file_name <- paste0("full_List_", i, "_expo", expo_cond, "_", expo_seq, "_", key_resp, ".csv")
   final_output_path <- file.path(output_folder, output_file_name)

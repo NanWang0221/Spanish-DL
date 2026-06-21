@@ -26,6 +26,9 @@ stimlist_folder <- "../exp1/!new-gorilla-stimlists/!final/"
 all_files <- list.files(stimlist_folder, pattern = "^full_List_.*\\.csv$", full.names = TRUE)
 ```
 
+
+## general setup across 18 lists
+
 ```{r check: exposure condition, Latin-square order and key position}
 
 list_check_table <- tibble()
@@ -37,6 +40,7 @@ for (file_path in all_files) {
   
   filename <- basename(file_path)
   
+  #checkpoint 1: exposure condition
   expo_condition_val <- list.df %>% 
     filter(block %in% c("2", "4", "6")) %>% 
     pull(condition) %>% 
@@ -44,9 +48,7 @@ for (file_path in all_files) {
     na.omit() %>% 
     paste(collapse = ", ")
   
-  # --- 檢查點 A: 抓取 Exposure Block 的順序 ---
-  # 我們篩選出正式 block 為 2, 4, 6 的列，並依序抓取它們的 blockID
-  # (使用 unique() 確保每個區塊只抓出一個字母，並依序排列)
+  #checkpoint 2: Latin-square order
   expo_order_seq <- list.df %>% 
     filter(block %in% c("2", "4", "6")) %>% 
     distinct(block, blockID) %>% 
@@ -54,53 +56,203 @@ for (file_path in all_files) {
     pull(blockID) %>% 
     paste(collapse = "") # 將字母拼起來，例如 "ABC"
   
-  # --- 檢查點 B: Unlabeled 的 d-left / d-right 值 ---
+  #checkpoint 3: key options for unlabeled trials
   unlabeled_left <- list.df %>% 
     filter(label == "unlabeled") %>% 
     pull(left) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
   
-  unlabeled_right <- dt %>% 
+  unlabeled_right <- list.df %>% 
     filter(label == "unlabeled") %>% 
     pull(right) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
   
-  # --- 檢查點 C: Labeled 的 d-left / d-right 值 ---
-  labeled_left <- dt %>% 
+  #checkpoint 4: key options for labeled trials
+  labeled_left <- list.df %>% 
     filter(label == "labeled") %>% 
     pull(left) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
   
-  labeled_right <- dt %>% 
+  labeled_right <- list.df %>% 
     filter(label == "labeled") %>% 
     pull(right) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
   
-  # 合併至總表
+  #checkpoint 5: number of practice, exposure, catch, and test trials
+  practice_count <- list.df %>% 
+    filter(display == "practice") %>% 
+    nrow()
+  
+  exposure_count <- list.df %>% 
+    filter(trial_type == "exposure") %>% 
+    nrow()
+  
+  catch_count <- list.df %>% 
+    filter(trial_type == "catch") %>% 
+    nrow()
+  
+  test_count <- list.df %>% 
+    filter(trial_type == "test") %>% 
+    nrow()
+  
+  main_total_count = exposure_count + catch_count + test_count
+  
   current_check <- tibble(
     Filename = filename,
+    Expo_Condition = expo_condition_val,
     LSQ_order = expo_order_seq,
     Unlabeled_Left = unlabeled_left,
     Unlabeled_Right = unlabeled_right,
     Labeled_Left = labeled_left,
-    Labeled_Right = labeled_right
+    Labeled_Right = labeled_right,
+    Practice_Count = practice_count,
+    Exposure_Count = exposure_count,
+    Catch_Count = catch_count,
+    Test_Count = test_count,
+    Total_Count = main_total_count
   )
   
   list_check_table <- bind_rows(list_check_table, current_check)
 }
 
-# 3. 依據檔名中的數字排序（防呆，避免 list_10 排在 list_1 剛好後面）
 list_check_table <- list_check_table %>% 
   mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
   arrange(list_id) %>% 
   select(-list_id)
 
-# 4. 在 RStudio 裡直接印出精美表格檢視
 view(list_check_table)
 
 ```
 
 ## Exposure blocks
 
+```{r exposure blocks structure, echo=FALSE}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+exposure_check_table <- tibble()
+
+for (file_path in all_files) {
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  filename <- basename(file_path)
+  
+  get_block_metrics <- function(df, block_num) {
+    block_df <- df %>% filter(block == as.character(block_num))
+    
+    total       <- nrow(block_df)
+    exposure    <- sum(block_df$trial_type == "exposure", na.rm = TRUE)
+    catch       <- sum(block_df$trial_type == "catch", na.rm = TRUE)
+    
+    d_labeled   <- sum(block_df$label == "labeled" & str_starts(block_df$word, "d"), na.rm = TRUE)
+    t_labeled   <- sum(block_df$label == "labeled" & str_starts(block_df$word, "t"), na.rm = TRUE)
+    
+    d_unlabeled <- sum(block_df$label == "unlabeled" & str_starts(block_df$word, "d"), na.rm = TRUE)
+    t_unlabeled <- sum(block_df$label == "unlabeled" & str_starts(block_df$word, "t"), na.rm = TRUE)
+    
+    return(list(
+      total = total,
+      exposure = exposure,
+      catch = catch,
+      d_labeled = d_labeled,
+      t_labeled = t_labeled,
+      d_unlabeled = d_unlabeled,
+      t_unlabeled = t_unlabeled
+    ))
+  }
+  
+  b2 <- get_block_metrics(list.df, 2)
+  b4 <- get_block_metrics(list.df, 4)
+  b6 <- get_block_metrics(list.df, 6)
+  
+  current_check <- tibble(
+    Filename = filename,
+    
+    block2_total         = b2$total,
+    block2_exposure      = b2$exposure,
+    block2_catch         = b2$catch,
+    block2_d_labeled     = b2$d_labeled,
+    block2_t_labeled     = b2$t_labeled,
+    block2_d_unlabeled   = b2$d_unlabeled,
+    block2_t_unlabeled   = b2$t_unlabeled,
+    
+    block4_total         = b4$total,
+    block4_exposure      = b4$exposure,
+    block4_catch         = b4$catch,
+    block4_d_labeled     = b4$d_labeled,
+    block4_t_labeled     = b4$t_labeled,
+    block4_d_unlabeled   = b4$d_unlabeled,
+    block4_t_unlabeled   = b4$t_unlabeled,
+    
+    block6_total         = b6$total,
+    block6_exposure      = b6$exposure,
+    block6_catch         = b6$catch,
+    block6_d_labeled     = b6$d_labeled,
+    block6_t_labeled     = b6$t_labeled,
+    block6_d_unlabeled   = b6$d_unlabeled,
+    block6_t_unlabeled   = b6$t_unlabeled
+  )
+  
+  exposure_check_table <- bind_rows(exposure_check_table, current_check)
+}
+
+exposure_check_table <- exposure_check_table %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+view(exposure_check_table)
+```
+
+```{r VOT distribution across exposure conditions, echo=FALSE}
+
+# 建立一個空表來存放各個 List 的 VOT 統計指標 (分 Block 2, 4, 6)
+vot_stats_table <- tibble()
+
+for (file_path in all_files) {
+  
+  # 讀取檔案（預設先統一讀成字串以防衝突）
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  filename <- basename(file_path)
+  
+  # 🛠️ 核心篩選與統計計算：篩選出正式 exposure 試驗並依 block 2, 4, 6 分組計算
+  stats_summary <- list.df %>% 
+    # 1. 篩選出正式的 exposure 試驗，且 block 為 2, 4, 6
+    filter(trial_type == "exposure" & block %in% c("2", "4", "6")) %>% 
+    # 2. 將字串型態的 VOT 轉回數值型態，以便進行數學運算
+    mutate(VOT = as.numeric(VOT)) %>% 
+    # 3. 依據 block 分組
+    group_by(block) %>% 
+    # 4. 計算各 block 的平均值、標準差與總個數
+    summarise(
+      Mean_VOT = mean(VOT, na.rm = TRUE),
+      SD_VOT   = sd(VOT, na.rm = TRUE),
+      Trial_Count = n(),
+      .groups = "drop"
+    )
+  
+  # 5. 將長型資料轉為寬型資料，讓一個 List 佔用一行，方便左右對比
+  stats_wide <- stats_summary %>% 
+    pivot_wider(
+      names_from = block,
+      values_from = c(Mean_VOT, SD_VOT, Trial_Count),
+      names_glue = "block{block}_{.value}"
+    )
+  
+  # 彙整當前檔案的結果
+  current_check <- tibble(Filename = filename) %>% 
+    bind_cols(stats_wide)
+  
+  vot_stats_table <- bind_rows(vot_stats_table, current_check)
+}
+
+# 🔄 依據檔名中的數字進行邏輯排序（List_1 到 List_18）
+vot_stats_table <- vot_stats_table %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+# 📊 在 RStudio 裡直接開啟精美表格檢視統計結果
+view(vot_stats_table)
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
