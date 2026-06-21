@@ -367,11 +367,11 @@ for (i in 1:18) {
   #order: T1 -> Expo_1 -> T2 -> Expo_2 -> T3 -> Expo_3 -> T4 -> T5 -> T6
   full_combined <- bind_rows(
     test_sheet %>% filter(blockID == "T1"),
-    expo_blocks[[1]],
+    expo_blocks[[blocks_to_load[1]]] %>% mutate(block = "2"),
     test_sheet %>% filter(blockID == "T2"),
-    expo_blocks[[2]],
+    expo_blocks[[blocks_to_load[2]]] %>% mutate(block = "4"),
     test_sheet %>% filter(blockID == "T3"),
-    expo_blocks[[3]],
+    expo_blocks[[blocks_to_load[3]]] %>% mutate(block = "6"),
     test_sheet %>% filter(blockID == "T4"),
     test_sheet %>% filter(blockID == "T5"),
     test_sheet %>% filter(blockID == "T6")
