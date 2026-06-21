@@ -1,0 +1,106 @@
+---
+title: "stim-list-sanity-check"
+output: html_document
+date: "2026-06-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load packages}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(tidyverse)
+```
+
+```{r load all 18 stimuli lists}
+stimlist_folder <- "../exp1/!new-gorilla-stimlists/!final/"
+all_files <- list.files(stimlist_folder, pattern = "^full_List_.*\\.csv$", full.names = TRUE)
+```
+
+```{r check: exposure condition, Latin-square order and key position}
+
+list_check_table <- tibble()
+
+for (file_path in all_files) {
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  filename <- basename(file_path)
+  
+  expo_condition_val <- list.df %>% 
+    filter(block %in% c("2", "4", "6")) %>% 
+    pull(condition) %>% 
+    unique() %>% 
+    na.omit() %>% 
+    paste(collapse = ", ")
+  
+  # --- 檢查點 A: 抓取 Exposure Block 的順序 ---
+  # 我們篩選出正式 block 為 2, 4, 6 的列，並依序抓取它們的 blockID
+  # (使用 unique() 確保每個區塊只抓出一個字母，並依序排列)
+  expo_order_seq <- list.df %>% 
+    filter(block %in% c("2", "4", "6")) %>% 
+    distinct(block, blockID) %>% 
+    arrange(block) %>% 
+    pull(blockID) %>% 
+    paste(collapse = "") # 將字母拼起來，例如 "ABC"
+  
+  # --- 檢查點 B: Unlabeled 的 d-left / d-right 值 ---
+  unlabeled_left <- list.df %>% 
+    filter(label == "unlabeled") %>% 
+    pull(left) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
+  
+  unlabeled_right <- dt %>% 
+    filter(label == "unlabeled") %>% 
+    pull(right) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
+  
+  # --- 檢查點 C: Labeled 的 d-left / d-right 值 ---
+  labeled_left <- dt %>% 
+    filter(label == "labeled") %>% 
+    pull(left) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
+  
+  labeled_right <- dt %>% 
+    filter(label == "labeled") %>% 
+    pull(right) %>% unique() %>% na.omit() %>% paste(collapse = ", ")
+  
+  # 合併至總表
+  current_check <- tibble(
+    Filename = filename,
+    LSQ_order = expo_order_seq,
+    Unlabeled_Left = unlabeled_left,
+    Unlabeled_Right = unlabeled_right,
+    Labeled_Left = labeled_left,
+    Labeled_Right = labeled_right
+  )
+  
+  list_check_table <- bind_rows(list_check_table, current_check)
+}
+
+# 3. 依據檔名中的數字排序（防呆，避免 list_10 排在 list_1 剛好後面）
+list_check_table <- list_check_table %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+# 4. 在 RStudio 裡直接印出精美表格檢視
+view(list_check_table)
+
+```
+
+## Exposure blocks
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

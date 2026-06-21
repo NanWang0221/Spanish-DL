@@ -133,7 +133,7 @@ for (current_file in file_paths) {
   
   new_filename_L <- paste0(condition_val_L, "_", block_val_L, "_", option_setup_val_L, ".csv")
   write.csv(updated_stimlist_d_left, 
-            file = paste0("../exp1/new-gorilla-stimlists/exposure/", new_filename_L),
+            file = paste0("../exp1/!new-gorilla-stimlists/exposure/", new_filename_L),
             row.names = FALSE)
   
   print(paste("d-left file saved:", new_filename_L))
@@ -186,7 +186,7 @@ for (current_file in file_paths) {
   
   new_filename_R <- paste0(condition_val_R, "_", block_val_R, "_", option_setup_val_R, ".csv")
   write.csv(updated_stimlist_d_right, 
-            file = paste0("../exp1/new-gorilla-stimlists/exposure/", new_filename_R),
+            file = paste0("../exp1/!new-gorilla-stimlists/exposure/", new_filename_R),
             row.names = FALSE)
   
   print(paste("d-right file saved:", new_filename_R))
@@ -323,6 +323,9 @@ design_blueprint <- tibble(
   key_resp   = rep(c("d-left", "d-right"), times = 9)
 )
 
+instruction_practice_rows <- read_csv("../exp1/!new-gorilla-stimlists/base/instruction_practice_rows.csv", show_col_types = F) |> mutate(across(everything(), as.character))
+
+
 for (i in 1:18) {
   
   # 抓取當前清單的藍圖設定
@@ -419,10 +422,10 @@ for (i in 1:18) {
     slice(1) %>% 
     mutate(across(everything(), ~ ""))
   
-  break_row$display <- "break"
-  
   final_list_with_breaks <- tibble()
   total_rows <- nrow(full_combined) #234 trials
+  
+  break_counter <- 1
   
   for (start_idx in seq(1, total_rows, by = 60)) {
     end_idx <- min(start_idx + 59, total_rows)
@@ -430,15 +433,30 @@ for (i in 1:18) {
     
     final_list_with_breaks <- bind_rows(final_list_with_breaks, chunk)
     
-    if (end_idx < total_rows) {
-      final_list_with_breaks <- bind_rows(final_list_with_breaks, break_row)
+  if (end_idx < total_rows) {
+      current_break <- break_row
+      current_break$display <- paste0("break", break_counter)
+      
+      final_list_with_breaks <- bind_rows(final_list_with_breaks, current_break)
+      
+      break_counter <- break_counter + 1
     }
   }
+  
+  final_row <- break_row
+  final_row$display <- "final"
+  
+  final_list_perfect <- bind_rows(
+    instruction_practice_rows,
+    final_list_with_breaks,
+    final_row
+    ) |> 
+    select(-list)
   
   output_file_name <- paste0("full_List_", i, "_expo", expo_cond, "_", expo_seq, "_", key_resp, ".csv")
   final_output_path <- file.path(output_folder, output_file_name)
   
-  write.csv(final_list_with_breaks, file = final_output_path, row.names = FALSE, fileEncoding = "UTF-8", na = "")
+  write.csv(final_list_perfect, file = final_output_path, row.names = FALSE, fileEncoding = "UTF-8", na = "")
 }
 ```
 

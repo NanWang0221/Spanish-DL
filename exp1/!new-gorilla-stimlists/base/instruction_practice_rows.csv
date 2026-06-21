@@ -1,0 +1,8 @@
+﻿display,trial_type,stim,word,VOT,label,condition,list_LSQ_variant,blockID,block,list,mean,sd,left,right,option_setup,progress_bar
+instructions,,,,,,,,,,,,,d,t,,
+practice,,dill_-50.wav,,,,,,,,,,,dill,till,,
+practice,,dill_-100.wav,,,,,,,,,,,dill,till,,
+practice,,din_+130.wav,,,,,,,,,,,din,tin,,
+practice,,dip_+120.wav,,,,,,,,,,,dip,tip,,
+practice,,dip_+125.wav,,,,,,,,,,,dip,tip,,
+preparation buffer,,,,,,,,,,,,,d,t,,
