@@ -54,7 +54,7 @@ for (file_path in all_files) {
     distinct(block, blockID) %>% 
     arrange(block) %>% 
     pull(blockID) %>% 
-    paste(collapse = "") # 將字母拼起來，例如 "ABC"
+    paste(collapse = "")
   
   #checkpoint 3: key options for unlabeled trials
   unlabeled_left <- list.df %>% 
@@ -198,61 +198,356 @@ exposure_check_table <- exposure_check_table %>%
   select(-list_id)
 
 view(exposure_check_table)
+
 ```
 
+
+### need double check, values different from the paper###
 ```{r VOT distribution across exposure conditions, echo=FALSE}
 
-# 建立一個空表來存放各個 List 的 VOT 統計指標 (分 Block 2, 4, 6)
 vot_stats_table <- tibble()
 
 for (file_path in all_files) {
   
-  # 讀取檔案（預設先統一讀成字串以防衝突）
   list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
     mutate(across(everything(), as.character))
   
   filename <- basename(file_path)
   
-  # 🛠️ 核心篩選與統計計算：篩選出正式 exposure 試驗並依 block 2, 4, 6 分組計算
   stats_summary <- list.df %>% 
-    # 1. 篩選出正式的 exposure 試驗，且 block 為 2, 4, 6
-    filter(trial_type == "exposure" & block %in% c("2", "4", "6")) %>% 
-    # 2. 將字串型態的 VOT 轉回數值型態，以便進行數學運算
+    filter(trial_type == "exposure") %>% 
     mutate(VOT = as.numeric(VOT)) %>% 
-    # 3. 依據 block 分組
-    group_by(block) %>% 
-    # 4. 計算各 block 的平均值、標準差與總個數
+    group_by(token_category) %>% 
     summarise(
       Mean_VOT = mean(VOT, na.rm = TRUE),
       SD_VOT   = sd(VOT, na.rm = TRUE),
       Trial_Count = n(),
       .groups = "drop"
     )
-  
-  # 5. 將長型資料轉為寬型資料，讓一個 List 佔用一行，方便左右對比
+
   stats_wide <- stats_summary %>% 
     pivot_wider(
-      names_from = block,
+      names_from = token_category,
       values_from = c(Mean_VOT, SD_VOT, Trial_Count),
-      names_glue = "block{block}_{.value}"
+      names_glue = "{token_category}_{.value}"
     )
   
-  # 彙整當前檔案的結果
   current_check <- tibble(Filename = filename) %>% 
     bind_cols(stats_wide)
   
   vot_stats_table <- bind_rows(vot_stats_table, current_check)
 }
 
-# 🔄 依據檔名中的數字進行邏輯排序（List_1 到 List_18）
 vot_stats_table <- vot_stats_table %>% 
   mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
   arrange(list_id) %>% 
   select(-list_id)
 
-# 📊 在 RStudio 裡直接開啟精美表格檢視統計結果
 view(vot_stats_table)
 
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r histograms for VOT distributions, echo=FALSE}
+raw_plot_data <- tibble()
+
+#VOT distrbution by blocks
+for (file_path in all_files) {
+  filename <- basename(file_path)
+  
+  list_id   <- as.numeric(str_extract(filename, "(?<=List_)\\d+"))
+  expo_cond <- str_extract(filename, "(?<=expo)[+-]?\\d+ms")
+  expo_seq  <- str_extract(filename, "(?<=ms_)[A-Z]{3}")
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  expo_df <- list.df %>% 
+    filter(trial_type == "exposure") %>% 
+    mutate(VOT = as.numeric(VOT))
+  
+  expo_df <- expo_df %>% 
+    mutate(material = case_when(
+      block == "2" ~ substr(expo_seq, 1, 1),
+      block == "4" ~ substr(expo_seq, 2, 2),
+      block == "6" ~ substr(expo_seq, 3, 3),
+      TRUE ~ NA_character_
+    ))
+  
+  cleaned_df <- expo_df %>% 
+    select(VOT, token_category, label, material) %>% 
+    mutate(
+      expo_cond = expo_cond,
+      list_id = list_id
+    )
+  
+  raw_plot_data <- bind_rows(raw_plot_data, cleaned_df)
+}
+
+#overall distribution
+plot_data_all <- raw_plot_data %>% 
+  mutate(material = "all")
+
+combined_plot_data <- bind_rows(
+  raw_plot_data %>% mutate(material = paste("Exposure materials", material)),
+  plot_data_all
+)
+
+combined_plot_data <- combined_plot_data %>% 
+  mutate(
+    expo_cond = factor(expo_cond, levels = c("-20ms", "-10ms", "+20ms")),
+    material  = factor(material, levels = c("Exposure materials A", "Exposure materials B", "Exposure materials C", "all")),
+    stimulus_type = case_when(
+      token_category == "d" & label == "labeled"   ~ "/d/ labeled",
+      token_category == "d" & label == "unlabeled" ~ "/d/ unlabeled",
+      token_category == "t" & label == "labeled"   ~ "/t/ labeled",
+      token_category == "t" & label == "unlabeled" ~ "/t/ unlabeled"
+    ),
+    stimulus_type = factor(stimulus_type, levels = c("/d/ labeled", "/d/ unlabeled", "/t/ labeled", "/t/ unlabeled")),
+    fill_group = paste(expo_cond, token_category, label, sep = "_")
+  )
+
+color_mapping <- c(
+  "-20ms_d_labeled"   = "#6b2021",
+  "-20ms_d_unlabeled" = "#f2a4a6",
+  "-20ms_t_labeled"   = "#c93237",
+  "-20ms_t_unlabeled" = "#fde9ea",
+  
+  "-10ms_d_labeled"   = "#1b6338",
+  "-10ms_d_unlabeled" = "#9adbb3",
+  "-10ms_t_labeled"   = "#27a75a",
+  "-10ms_t_unlabeled" = "#e7f6ed",
+  
+  "+20ms_d_labeled"   = "#175487",
+  "+20ms_d_unlabeled" = "#9bcff2",
+  "+20ms_t_labeled"   = "#2185c5",
+  "+20ms_t_unlabeled" = "#e6f3fc"
+)
+
+#mean and SD information
+annotations <- tibble(
+  expo_cond = factor(c("-20ms", "-10ms", "+20ms"), levels = c("-20ms", "-10ms", "+20ms")),
+  material  = factor("all", levels = c("Exposure materials A", "Exposure materials B", "Exposure materials C", "all")),
+  x = 40,
+  y = 20,
+  label_text = c(
+    "μ_d = 5,  σ_d = 8.9\nμ_t = 50, σ_t = 16.4",
+    "μ_d = 15,  σ_d = 8.9\nμ_t = 60, σ_t = 16.4",
+    "μ_d = 45,  σ_d = 8.9\nμ_t = 90, σ_t = 16.4"
+  )
+)
+
+p <- ggplot(combined_plot_data) +
+  geom_histogram(
+    aes(x = VOT, y = after_stat(count / 6), fill = fill_group),
+    binwidth = 5,
+    position = "stack",
+    color = "white",
+    linewidth = 0.1
+  ) +
+  scale_fill_manual(
+    values = color_mapping,
+    breaks = c("-20ms_d_labeled", "-20ms_d_unlabeled", "-20ms_t_labeled", "-20ms_t_unlabeled"),
+    labels = c("/d/ labeled", "/d/ unlabeled", "/t/ labeled", "/t/ unlabeled")
+  ) +
+  facet_grid(expo_cond ~ material) +
+  guides(
+    fill = guide_legend(
+      title = "Stimulus type",
+      nrow = 2,
+      byrow = FALSE,
+      override.aes = list(
+        fill = c(
+          "#555555", # /d/ labeled
+          "#cccccc", # /d/ unlabeled
+          "#777777", # /t/ labeled
+          "#f5f5f5"  # /t/ unlabeled
+        ),
+        color = c("white", "white", "white", "#cccccc"),
+        linewidth = c(0.1, 0.1, 0.1, 0.4)
+      )
+    )
+  ) +
+  geom_text(
+    data = annotations,
+    aes(x = x, y = y, label = label_text),
+    hjust = 0,
+    size = 3.5,
+    color = "black",
+    fontface = "italic",
+    lineheight = 1.1
+  ) +
+  scale_x_continuous(breaks = seq(0, 100, by = 50), limits = c(-25, 135)) +
+  scale_y_continuous(breaks = seq(0, 20, by = 5), limits = c(0, 22)) +
+  labs(
+    x = "VOT (ms)",
+    y = "Count (per participant)",
+    fill = "Stimulus type"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    strip.background = element_rect(fill = "black", color = "black"),
+    strip.text = element_text(color = "white", face = "bold", size = 10),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "gray95"),
+    aspect.ratio = 0.85
+  )
+
+p
+
+```
+## Test blocks
+
+#1. all 12 VOT locations need to appear in each block
+```{r VOT check, echo=FALSE}
+
+expected_vots <- c(-5, 5, 15, 25, 30, 35, 40, 45, 50, 55, 65, 70)
+
+test_check.1 <- tibble()
+
+for (file_path in all_files) {
+  filename <- basename(file_path)
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  test_df <- list.df %>% 
+    filter(trial_type == "test") %>% 
+    mutate(VOT = as.numeric(VOT))
+  
+    block_summary <- test_df %>% 
+    group_by(blockID) %>% 
+    summarise(
+      trial_count = n(),
+      vot_match = identical(sort(unique(VOT)), expected_vots),
+      .groups = "drop"
+    )
+  
+  block_summary_wide <- block_summary %>% 
+    pivot_wider(
+      names_from = blockID,
+      values_from = c(trial_count, vot_match),
+      names_glue = "{blockID}_{.value}"
+    )
+  
+  current_check <- tibble(Filename = filename) %>% 
+    bind_cols(block_summary_wide)
+  
+  test_check.1 <- bind_rows(test_check.1, current_check)
+}
+
+test_check.1 <- test_check.1 %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+view(test_check.1)
+
+```
+
+#2. each minimal pair appears four times in each block
+```{r minimal pair check, echo=FALSE}
+
+test_check.2 <- tibble()
+
+for (file_path in all_files) {
+  filename <- basename(file_path)
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  test_df <- list.df %>% 
+    filter(trial_type == "test")
+  
+  pair_summary <- test_df %>% 
+    group_by(blockID, word) %>% 
+    summarise(count = n(), .groups = "drop")
+  
+  pair_summary_wide <- pair_summary %>% 
+    pivot_wider(
+      names_from = c(blockID, word),
+      values_from = count,
+      names_glue = "{blockID}_{word}"
+    )
+  
+  all_perfect <- nrow(pair_summary) == 18 && all(pair_summary$count == 4)
+  
+  current_check <- tibble(Filename = filename) %>% 
+    bind_cols(pair_summary_wide) %>% 
+    mutate(All_Perfect = all_perfect)
+  
+  test_check.2 <- bind_rows(test_check.2, current_check)
+}
+
+test_check.2 <- test_check.2 %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+view(test_check.2)
+
+```
+
+#3. each minimal pair appear with each VOT equally often (twice) across all six test blocks (and no more than once per test block)
+```{r minimal pair check, echo=FALSE}
+
+test_check.3 <- tibble()
+
+for (file_path in all_files) {
+  filename <- basename(file_path)
+  
+  list.df <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(across(everything(), as.character))
+  
+  test_df <- list.df %>% 
+    filter(trial_type == "test") %>% 
+    mutate(VOT = as.numeric(VOT))
+  
+  overall_cooccur <- test_df %>% 
+    group_by(word, VOT) %>% 
+    summarise(count = n(), .groups = "drop")
+  
+  num_combinations <- nrow(overall_cooccur)
+  min_count <- if(num_combinations > 0) min(overall_cooccur$count) else 0
+  max_count <- if(num_combinations > 0) max(overall_cooccur$count) else 0
+  all_exactly_2 <- num_combinations == 36 && min_count == 2 && max_count == 2
+  
+  overall_status <- if (all_exactly_2) {
+    "TRUE"
+  } else {
+    paste0("Error (Total combinations: ", num_combinations, ", Range: ", min_count, "-", max_count, ")")
+  }
+  
+  block_cooccur <- test_df %>% 
+    group_by(blockID, word, VOT) %>% 
+    summarise(count = n(), .groups = "drop")
+  
+  max_block_count <- if(nrow(block_cooccur) > 0) max(block_cooccur$count) else 0
+  no_dup_in_block <- max_block_count <= 1
+  
+  block_status <- if (no_dup_in_block) {
+    "TRUE"
+  } else {
+    paste0("Error (Max duplicate count = ", max_block_count, ")")
+  }
+  
+  current_check <- tibble(
+    Filename = filename,
+    token_two_repetition_across_block = overall_status,
+    no_duplicate_within_block = block_status
+  )
+  
+  test_check.3 <- bind_rows(test_check.3, current_check)
+}
+
+test_check.3 <- test_check.3 %>% 
+  mutate(list_id = as.numeric(str_extract(Filename, "(?<=List_)\\d+"))) %>% 
+  arrange(list_id) %>% 
+  select(-list_id)
+
+view(test_check.3)
+
+```
+
+
