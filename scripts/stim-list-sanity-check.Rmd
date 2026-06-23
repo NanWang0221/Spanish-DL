@@ -447,7 +447,7 @@ view(test_check.1)
 ```
 
 #2. each minimal pair appears four times in each block
-```{r minimal pair check, echo=FALSE}
+```{r minimal pair check within blocks, echo=FALSE}
 
 test_check.2 <- tibble()
 
@@ -490,7 +490,7 @@ view(test_check.2)
 ```
 
 #3. each minimal pair appear with each VOT equally often (twice) across all six test blocks (and no more than once per test block)
-```{r minimal pair check, echo=FALSE}
+```{r minimal pair check across blocks, echo=FALSE}
 
 test_check.3 <- tibble()
 
