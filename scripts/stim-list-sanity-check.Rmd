@@ -551,3 +551,21 @@ view(test_check.3)
 ```
 
 
+
+```{r}
+
+c.m20 <-read.csv("/Users/nwang40/Documents/Gitrepo/Spanish-DL/exp1/!new-gorilla-stimlists/!final/full_List_5_expo-20ms_BCA_d-left.csv") %>% filter(display == "phonetic categorization") %>% mutate(cond = "m20")
+c.m10 <-read.csv("/Users/nwang40/Documents/Gitrepo/Spanish-DL/exp1/!new-gorilla-stimlists/!final/full_List_11_expo-10ms_BCA_d-left.csv")%>% filter(display == "phonetic categorization")%>% mutate(cond = "m10")
+c.p20 <-read.csv("/Users/nwang40/Documents/Gitrepo/Spanish-DL/exp1/!new-gorilla-stimlists/!final/full_List_17_expo+20ms_BCA_d-left.csv")%>% filter(display == "phonetic categorization") %>% mutate(cond = "p20")
+
+c <- bind_rows(c.m20, c.m10, c.p20)
+
+c %>% filter(trial_type == "test") %>%
+  ggplot(aes(x = VOT, fill = word)) +
+  geom_bar() +
+  facet_wrap(~ cond)
+
+```
+
+
+
