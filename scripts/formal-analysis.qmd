@@ -1,0 +1,74 @@
+---
+title: "formal-spanish"
+format: html
+editor: visual
+---
+
+```{r load library, include=FALSE}
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(lme4)
+library(magrittr)
+library(ggeffects)
+```
+
+```{r load data}
+raw <- bind_rows(read.csv("../data/formal-pilot/data-task-pkec.csv"), read.csv("../data/formal-pilot/data-task-pkec2.csv")) %>%
+  rename(ID = 'Participant.Private.ID',
+         stim = 'Spreadsheet..stim',
+         trial_type = 'Spreadsheet..trial_type',
+         blockID = 'Spreadsheet..blockID',
+         rt = 'Reaction.Time', 
+         condition = 'Spreadsheet..condition')%>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  filter(Response != "") %>%                    # drop screen-advance events (blank Response)
+  mutate(
+    catch = case_when(
+      str_detect(stim, "left")  ~ Spreadsheet..left,
+      str_detect(stim, "right") ~ Spreadsheet..right,
+    ))%>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = case_when(
+      str_detect(Response, "^t") ~ 1,
+      str_detect(Response, "^d") ~ 0)) %>%
+  mutate(word = str_extract(stim, "^[^_]+" ))
+```
+
+```{r}
+
+participant.condition <- raw %>%
+  filter(condition != "") %>%
+  distinct(ID, condition)
+
+data.proc <- raw %>%
+  filter(trial_type != "catch") %>%                    
+  select(VOT, resp.num, ID, blockID, word, stim) %>% 
+  left_join(participant.condition, by = "ID") %>% 
+  group_by(condition, blockID, ID) %>%
+  summarise(prop.t = mean(resp.num), .groups = "drop")
+
+prop.summary <- data.proc %>%
+  group_by(condition, blockID) %>%
+  summarise(mean.prop = mean(prop.t), se = sd(prop.t) / sqrt(n()), .groups = "drop") %>%
+  mutate(ci.lo = mean.prop - 1.96 * se,
+         ci.hi = mean.prop + 1.96 * se)
+
+block.order <- c("T1", "A", "T2", "B", "T3", "C", "T4", "T5", "T6")
+prop.summary <- prop.summary %>%
+  mutate(blockID = factor(blockID, levels = block.order))
+
+ggplot(prop.summary, aes(x = blockID, y = mean.prop,
+                        colour = condition, group = condition)) +   # group=condition draws one line per condition
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = ci.lo, ymax = ci.hi),
+                width = 0.15) +
+  labs(x = "Block", y = "Proportion /t/-responses", colour = "Exposure condition") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
