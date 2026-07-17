@@ -44,22 +44,29 @@ participant.condition <- raw %>%
   distinct(ID, condition)
 
 data.plot <- raw %>%
-  filter(trial_type != "catch") %>%      
-  mutate(blockID = factor(blockID, levels = c("T1", "A", "T2", "B", "T3", "C", "T4", "T5", "T6"))) %>%
-  select(VOT, resp.num, ID, blockID, word, stim) %>% 
-  left_join(participant.condition, by = "ID") %>% 
-  group_by(condition, blockID, ID) %>%
-  summarise(prop.t = mean(resp.num), .groups = "drop")%>%
-  group_by(condition, blockID) %>%
-  summarise(mean.prop = mean(prop.t), .groups = "drop") 
+  filter(trial_type != "catch") %>%
+  left_join(participant.condition, by = "ID") %>%
+  mutate(blockID = factor(blockID, levels = c("T1","A","T2","B","T3","C","T4","T5","T6")), ID = factor(ID)) %>%
+  group_by(ID, blockID) %>%
+  summarise(mean.prop = mean(resp.num), .groups = "drop")
 
-
-ggplot(data.plot, aes(x = blockID, y = mean.prop, colour = condition, group = condition)) +   
-  geom_line() +
+ggplot(data.plot, aes(blockID, mean.prop, colour = ID, group = ID)) +
+  geom_line() + 
   geom_point() +
-  labs(x = "Block", y = "Proportion /t/-responses", colour = "Exposure condition") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
+  labs(x = "Block", y = "Proportion /t/")
 
 ```
+```{r}
+raw %>%
+  filter(trial_type != "catch", !is.na(resp.num)) %>%
+  left_join(participant.condition, by = "ID") %>%
+  #filter(blockID %in% c("A", "B", "C"))%>%
+  #filter(blockID %in% c("T1", "T2", "T3", "T4", "T5", "T6"))%>%
+  ggplot(aes(VOT, resp.num, colour = blockID)) +
+  stat_summary(fun = mean, geom = "point") +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  facet_wrap(~ blockID) +
+  labs(x = "VOT (ms)", y = "Proportion /t/")
+
+```
+
