@@ -14,42 +14,75 @@ library(ggeffects)
 ```
 
 ```{r load data}
-raw <- read.csv("../data/formal/data_exp_269901-v15_task-pkec.csv") %>%
+raw <- bind_rows(read.csv("../data/formal-pilot/data-task-pkec.csv"), read.csv("../data/formal-pilot/data-task-pkec2.csv"), read.csv("../data/formal-pilot/frankie-data-task-pkec.csv"), read.csv("../data/formal-pilot/qiyan-data-task-pkec.csv"), read.csv("../data/formal-pilot/jacob-data-task-pkec.csv")) %>%
   rename(ID = 'Participant.Private.ID',
+         list = 'counterbalance.gj4p',
+         word = 'Spreadsheet..word',
          stim = 'Spreadsheet..stim',
          trial_type = 'Spreadsheet..trial_type',
          blockID = 'Spreadsheet..blockID',
          rt = 'Reaction.Time', 
-         condition = 'Spreadsheet..condition')%>%
+         condition = 'Spreadsheet..condition',
+         VOT = 'Spreadsheet..VOT')%>%
   filter(Display == "phonetic categorization") %>%
+  filter(Screen == "2AFC") %>%
   filter(Response.Type == "response") %>%
-  filter(Response != "") %>%                    # drop screen-advance events (blank Response)
-  mutate(
-    catch = if_else(trial_type == "catch",
-                    str_remove(stim, "\\.[^.]+$"),   # correct answer = word matching the audio (stim without extension)
-                    NA_character_)) %>%
-  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
-  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  #filter(Response != "") %>%                    # drop screen-advance events (blank Response)
+  #mutate(
+  #  catch = case_when(
+  #    str_detect(stim, "left")  ~ Spreadsheet..left,
+  #    str_detect(stim, "right") ~ Spreadsheet..right,
+  #  ))%>%
+  #mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  #mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
   mutate(resp.num = case_when(
       str_detect(Response, "^t") ~ 1,
-      str_detect(Response, "^d") ~ 0)) %>%
-  mutate(word = str_extract(stim, "^[^_]+" ))
-
-participant.condition <- raw %>%
-  filter(condition != "") %>%
-  distinct(ID, condition) %>%
-  rename(participant.condition = condition)
-
-raw <- raw %>% left_join(participant.condition, by = "ID")
+      str_detect(Response, "^d") ~ 0))
+  #mutate(word = str_extract(stim, "^[^_]+" ))
 ```
 
 ```{r}
 
+#check counterbalanced list assignment
+sum.list.assign <- raw %>%
+  group_by(list) %>%
+  summarise(n_subjects = n_distinct(ID))
 
+#check catch trial accuracy
+sum.catch_accuracy <- raw %>%
+  filter(trial_type == "catch") %>% 
+  mutate(catch.corr = if_else(word == Response, 1, 0)) %>% 
+  group_by(ID) %>% 
+  summarise(
+    total_catch = n(),
+    accuracy = mean(catch.corr)
+  )
+
+#check trial number in each exposure and test blocks
+sum.trial.num <- raw %>%
+  filter(trial_type != "catch") %>% 
+  group_by(ID, blockID) %>% 
+  summarise(
+    trial_num = n(),
+    .groups = "drop"
+  ) %>% 
+  tidyr::pivot_wider(
+    names_from = blockID, 
+    values_from = trial_num
+  )
+
+
+```
+
+```{r}
+
+participant.condition <- raw %>%
+  filter(condition != "") %>%
+  distinct(ID, condition)
 
 data.plot <- raw %>%
   filter(trial_type != "catch") %>%
-  #left_join(participant.condition, by = "ID") %>% Nan moved this line of code into the preprocessing of raw data, so that we don't need to left_join very time
+  left_join(participant.condition, by = "ID") %>%
   mutate(blockID = factor(blockID, levels = c("T1","A","T2","B","T3","C","T4","T5","T6")), ID = factor(ID)) %>%
   group_by(ID, blockID) %>%
   summarise(mean.prop = mean(resp.num), .groups = "drop")
@@ -61,118 +94,64 @@ ggplot(data.plot, aes(blockID, mean.prop, colour = ID, group = ID)) +
 
 ```
 
-```{r plot by test exposure sessions}
-raw %>%
+```{r}
+
+#prepare dataset for crticial trials
+df.critical.trial <- raw %>%
   filter(trial_type != "catch", !is.na(resp.num)) %>%
-  ggplot(aes(VOT, resp.num, colour = blockID)) +
-  stat_summary(fun = mean, geom = "point") +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  facet_wrap(~ blockID) +
-  labs(x = "VOT (ms)", y = "Proportion /t/")
-
-```
-
-```{r plot by conditions}
-
-raw %>%
-  filter(trial_type != "catch", !is.na(resp.num)) %>%
-  ggplot(aes(VOT, resp.num, colour = participant.condition)) +
-  stat_summary(fun = mean, geom = "point") +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  labs(x = "VOT (ms)", y = "Proportion /t/")
-
-```
-
-## Preprocessing and exclusion
-
-```{r exclusion, warning=FALSE}
-
-#check timedOut trial numbers in the 2AFC task (participants with zero timedOut trial will not be included here) -- code is removed because it has already been dropped in the loading of raw
-
-#Participant-level exclusion
-
-# low catch trial accuracy
-# check acc on catch trials (12 catch trials in total)
-# participants with < 60% accuracy on catch trials will be removed
-data.catch.acc <- raw %>% 
-  filter(trial_type == "catch") %>%
-  group_by(ID) %>%
-  summarise(
-    num_of_correct = sum(catch.corr, na.rm = TRUE),
-    exclude.catch  = num_of_correct < 10, ## @will double confirm threshold
-    .groups = "drop"
-  )
-
-data.exclude.catch.low.acc <- data.catch.acc %>% 
-  filter(exclude.catch == TRUE)%>% 
-  distinct(ID)
-
-# RT too fast
-# exclude participant with excessive number of RTs < 200ms trials 
-# 7 participants excluded @will
-
-#N=30 
-data.rt.all <- raw %>%
-  left_join(data.catch.acc, by = "ID") %>%
-  filter(exclude.catch == FALSE) %>% 
-  filter(trial_type != "catch")
-
-data.subj.too.fast <- data.rt.all %>% 
+  left_join(participant.condition, by = "ID") %>%
+  mutate(ID = as.factor(ID)) %>%
   group_by(ID) %>% 
-  summarise(
-    n = sum(rt < 200, na.rm = TRUE),
-    exclude.too.fast = n > 42,  ## @will double confirm threshold
-    .groups = "drop"
-  )
-
-#N=23
-data.rt.good.subj <- data.rt.all %>%
-  left_join(data.subj.too.fast %>% select(ID, exclude.too.fast), by = "ID") %>%
-  filter(exclude.too.fast == FALSE)
-
-
-# check participant-level rt,  all qualified
-#data.rt.part <- raw %>%
-#  left_join(data.cal.acc, by = "ID") %>% 
-#  filter(exclude.catch == FALSE) %>% 
-#  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
-#  group_by(ID) %>% 
-#  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
-#    rt.log.z = as.numeric(scale(rt.log)),
-#    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
-#    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
-
-
-#Trial level
-
-# hard cut-off: exclude trials with RTs < 200ms or > 3000ms
-#N=4957 to 4787
-data.rt.trim <- data.rt.good.subj %>%
-  filter(rt > 200 & rt < 3000) %>%
-  mutate(rt.log = log10(rt))
-
-#check if any participant mean RT +-3SD of group mean
-#seven people are removed @will
-data.subj.rt.means <- data.rt.trim %>%
-  group_by(ID) %>%
-  summarise(
-    subj_mean_rt.log = mean(rt.log, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
   mutate(
-    subj_mean_rt.log.z = as.numeric(scale(subj_mean_rt.log)),
-    exclude.by.subj.rt = ifelse(abs(subj_mean_rt.log.z) > 3, TRUE, FALSE)
+    block_order = match(blockID, unique(blockID)),
+    
+    exp_stageID = c("Test 1", "Exposure 1", 
+                         "Test 2", "Exposure 2", 
+                         "Test 3", "Exposure 3", 
+                         "Test 4", "Test 5", "Test 6")[block_order],
+  ) %>%
+  ungroup()  %>%
+  mutate(
+    exp_stageID = factor(
+      exp_stageID, 
+      levels = c("Test 1", "Exposure 1", 
+                 "Test 2", "Exposure 2", 
+                 "Test 3", "Exposure 3", 
+                 "Test 4", "Test 5", "Test 6")
+    )
   )
+  #filter(blockID %in% c("A", "B", "C"))%>%
+  #filter(blockID %in% c("T1", "T2", "T3", "T4", "T5", "T6"))%>%
+```
 
-#exclude trials with RT +-3SD within participants
-#N= 4787 to 4749
-data.preprc <- data.rt.trim %>%
-   group_by(ID) %>%
-   mutate(within.subj.rt.log.z = as.numeric(scale(rt.log))) %>%
-   filter(abs(within.subj.rt.log.z) <= 3) %>%
-   ungroup()
+```{r}
 
+# categorization response as a function of VOT and exposure condition across blocks
 
+#df.by_subj <- raw %>%
+#  filter(trial_type != "catch", !is.na(resp.num)) %>%
+#  left_join(participant.condition, by = "ID") %>%
+#  group_by(ID, blockID, condition.y, VOT) %>%
+#  summarise(prop_t = mean(resp.num), .groups = "drop")
+
+ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = condition.y)) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  stat_summary(fun = mean, geom = "point") +
+  facet_wrap(~ exp_stageID) +
+  labs(x = "VOT (ms)", y = "Proportion /t/")
 
 ```
 
+```{r}
+
+# categorization response by participants
+
+ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = ID, group = ID)) +
+  stat_summary(fun = mean, geom = "point", 
+               position = position_jitter(width = 0.8, height = 0.02), size=1.5) +
+  stat_summary(fun = mean, geom = "line", alpha = 0.5) + 
+  facet_wrap(~ exp_stageID) +
+  labs(x = "VOT (ms)", y = "Proportion /t/") +
+  theme_bw()
+
+```
