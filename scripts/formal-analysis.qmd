@@ -78,6 +78,28 @@ sum.trial.num <- raw %>%
     values_from = trial_num
   )
 
+#check overall RT across participants
+sum.RT <- raw %>%
+  filter(trial_type != "catch") %>% 
+  group_by(ID) %>% 
+  summarise(
+    trial_num = n(),
+    RT = mean(rt),
+    .groups = "drop"
+  )
+
+#check valid responses across participants
+sum.resp.num <- raw %>%
+  filter(trial_type != "catch", !is.na(resp.num)) %>%
+  group_by(ID) %>% 
+  summarise(
+    resp.num = sum(!is.na(resp.num)),
+    .groups = "drop"
+  )
+
+check.na.resp <- raw %>% 
+  filter(trial_type != "catch", is.na(resp.num)) %>% 
+  select(ID, trial_type, blockID, Response, rt, resp.num)
 
 ```
 
@@ -129,6 +151,10 @@ df.critical.trial <- raw %>%
   )
   #filter(blockID %in% c("A", "B", "C"))%>%
   #filter(blockID %in% c("T1", "T2", "T3", "T4", "T5", "T6"))%>%
+
+
+hist(df.critical.trial$rt, breaks=50)
+
 ```
 
 ```{r}
@@ -141,7 +167,7 @@ df.critical.trial <- raw %>%
 #  group_by(ID, blockID, condition.y, VOT) %>%
 #  summarise(prop_t = mean(resp.num), .groups = "drop")
 
-ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = condition.y)) +
+ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = participant.condition)) +
   geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
   stat_summary(fun = mean, geom = "point") +
   facet_wrap(~ exp_stageID) +
@@ -162,6 +188,7 @@ ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = ID, group = ID)) 
   theme_bw()
 
 ```
+
 ```{r plot by conditions}
 
 raw %>%
