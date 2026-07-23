@@ -1,0 +1,178 @@
+---
+title: "formal-spanish"
+format: html
+editor: visual
+---
+
+```{r load library, include=FALSE}
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(lme4)
+library(magrittr)
+library(ggeffects)
+```
+
+```{r load data}
+raw <- read.csv("../data/formal/data_exp_269901-v15_task-pkec.csv") %>%
+  rename(ID = 'Participant.Private.ID',
+         stim = 'Spreadsheet..stim',
+         trial_type = 'Spreadsheet..trial_type',
+         blockID = 'Spreadsheet..blockID',
+         rt = 'Reaction.Time', 
+         condition = 'Spreadsheet..condition')%>%
+  filter(Display == "phonetic categorization") %>%
+  filter(Response.Type == "response") %>%
+  filter(Response != "") %>%                    # drop screen-advance events (blank Response)
+  mutate(
+    catch = if_else(trial_type == "catch",
+                    str_remove(stim, "\\.[^.]+$"),   # correct answer = word matching the audio (stim without extension)
+                    NA_character_)) %>%
+  mutate(catch.corr = if_else(catch == Response, 1, 0))%>%
+  mutate(VOT = as.numeric(str_extract(stim, "(?<=_)[^.]+"))) %>%
+  mutate(resp.num = case_when(
+      str_detect(Response, "^t") ~ 1,
+      str_detect(Response, "^d") ~ 0)) %>%
+  mutate(word = str_extract(stim, "^[^_]+" ))
+
+participant.condition <- raw %>%
+  filter(condition != "") %>%
+  distinct(ID, condition) %>%
+  rename(participant.condition = condition)
+
+raw <- raw %>% left_join(participant.condition, by = "ID")
+```
+
+```{r}
+
+
+
+data.plot <- raw %>%
+  filter(trial_type != "catch") %>%
+  #left_join(participant.condition, by = "ID") %>% Nan moved this line of code into the preprocessing of raw data, so that we don't need to left_join very time
+  mutate(blockID = factor(blockID, levels = c("T1","A","T2","B","T3","C","T4","T5","T6")), ID = factor(ID)) %>%
+  group_by(ID, blockID) %>%
+  summarise(mean.prop = mean(resp.num), .groups = "drop")
+
+ggplot(data.plot, aes(blockID, mean.prop, colour = ID, group = ID)) +
+  geom_line() + 
+  geom_point() +
+  labs(x = "Block", y = "Proportion /t/")
+
+```
+
+```{r plot by test exposure sessions}
+raw %>%
+  filter(trial_type != "catch", !is.na(resp.num)) %>%
+  ggplot(aes(VOT, resp.num, colour = blockID)) +
+  stat_summary(fun = mean, geom = "point") +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  facet_wrap(~ blockID) +
+  labs(x = "VOT (ms)", y = "Proportion /t/")
+
+```
+
+```{r plot by conditions}
+
+raw %>%
+  filter(trial_type != "catch", !is.na(resp.num)) %>%
+  ggplot(aes(VOT, resp.num, colour = participant.condition)) +
+  stat_summary(fun = mean, geom = "point") +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  labs(x = "VOT (ms)", y = "Proportion /t/")
+
+```
+
+## Preprocessing and exclusion
+
+```{r exclusion, warning=FALSE}
+
+#check timedOut trial numbers in the 2AFC task (participants with zero timedOut trial will not be included here) -- code is removed because it has already been dropped in the loading of raw
+
+#Participant-level exclusion
+
+# low catch trial accuracy
+# check acc on catch trials (12 catch trials in total)
+# participants with < 60% accuracy on catch trials will be removed
+data.catch.acc <- raw %>% 
+  filter(trial_type == "catch") %>%
+  group_by(ID) %>%
+  summarise(
+    num_of_correct = sum(catch.corr, na.rm = TRUE),
+    exclude.catch  = num_of_correct < 10, ## @will double confirm threshold
+    .groups = "drop"
+  )
+
+data.exclude.catch.low.acc <- data.catch.acc %>% 
+  filter(exclude.catch == TRUE)%>% 
+  distinct(ID)
+
+# RT too fast
+# exclude participant with excessive number of RTs < 200ms trials 
+# 7 participants excluded @will
+
+#N=30 
+data.rt.all <- raw %>%
+  left_join(data.catch.acc, by = "ID") %>%
+  filter(exclude.catch == FALSE) %>% 
+  filter(trial_type != "catch")
+
+data.subj.too.fast <- data.rt.all %>% 
+  group_by(ID) %>% 
+  summarise(
+    n = sum(rt < 200, na.rm = TRUE),
+    exclude.too.fast = n > 42,  ## @will double confirm threshold
+    .groups = "drop"
+  )
+
+#N=23
+data.rt.good.subj <- data.rt.all %>%
+  left_join(data.subj.too.fast %>% select(ID, exclude.too.fast), by = "ID") %>%
+  filter(exclude.too.fast == FALSE)
+
+
+# check participant-level rt,  all qualified
+#data.rt.part <- raw %>%
+#  left_join(data.cal.acc, by = "ID") %>% 
+#  filter(exclude.catch == FALSE) %>% 
+#  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
+#  group_by(ID) %>% 
+#  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
+#    rt.log.z = as.numeric(scale(rt.log)),
+#    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
+#    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
+
+
+#Trial level
+
+# hard cut-off: exclude trials with RTs < 200ms or > 3000ms
+#N=4957 to 4787
+data.rt.trim <- data.rt.good.subj %>%
+  filter(rt > 200 & rt < 3000) %>%
+  mutate(rt.log = log10(rt))
+
+#check if any participant mean RT +-3SD of group mean
+#seven people are removed @will
+data.subj.rt.means <- data.rt.trim %>%
+  group_by(ID) %>%
+  summarise(
+    subj_mean_rt.log = mean(rt.log, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    subj_mean_rt.log.z = as.numeric(scale(subj_mean_rt.log)),
+    exclude.by.subj.rt = ifelse(abs(subj_mean_rt.log.z) > 3, TRUE, FALSE)
+  )
+
+#exclude trials with RT +-3SD within participants
+#N= 4787 to 4749
+data.preprc <- data.rt.trim %>%
+   group_by(ID) %>%
+   mutate(within.subj.rt.log.z = as.numeric(scale(rt.log))) %>%
+   filter(abs(within.subj.rt.log.z) <= 3) %>%
+   ungroup()
+
+
+
+```
+
