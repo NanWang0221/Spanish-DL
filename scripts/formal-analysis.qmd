@@ -5,6 +5,7 @@ editor: visual
 ---
 
 ```{r load library, include=FALSE}
+rm(list = ls())
 library(dplyr)
 library(stringr)
 library(tidyverse)
@@ -13,8 +14,12 @@ library(magrittr)
 library(ggeffects)
 ```
 
-```{r load data}
-raw <- read.csv("../data/formal/data_exp_269901-v15_task-pkec.csv") %>%
+```{r load data (old)}
+
+#currently disable as we'll directly use the preprocessed dataset, but keep this for record
+
+if (FALSE) {
+raw <- read.csv("../data/formal/formal-full-data-preprocessed.csv") %>%
   rename(ID = 'Participant.Private.ID',
          list = 'counterbalance.gj4p',
          word = 'Spreadsheet..word',
@@ -46,24 +51,35 @@ participant.condition <- raw %>%
   rename(participant.condition = condition) # i move it upwards, so no need for left_join every time @will 
 
 raw <- raw %>% left_join(participant.condition, by = "ID") 
+}
 ```
 
-```{r}
+```{r save pre-processed dataset (need to be <100MB to be pushed to github)}
+
+#already run, no need to implement
+#write.csv(raw, "../data/formal/formal-full-data-preprocessed.csv", row.names = FALSE)
+
+```
+
+```{r load preprocessed dataset}
+raw <- read.csv("../data/formal/formal-full-data-preprocessed.csv")
+raw$rt.log = log(raw$rt)
+raw <- raw |> 
+  rename(label_type = 'Spreadsheet..label')
+```
+
+```{r sanity check of experiment setup}
 
 #check counterbalanced list assignment
 sum.list.assign <- raw %>%
   group_by(list) %>%
   summarise(n_subjects = n_distinct(ID))
 
-#check catch trial accuracy
-sum.catch_accuracy <- raw %>%
-  filter(trial_type == "catch") %>% 
-  mutate(catch.corr = if_else(word == Response, 1, 0)) %>% 
-  group_by(ID) %>% 
-  summarise(
-    total_catch = n(),
-    accuracy = mean(catch.corr)
-  )
+#check exposure condition assignment
+sum.condition.assign <- raw %>%
+  filter(condition!="") %>%
+  group_by(condition) %>%
+  summarise(n_subjects = n_distinct(ID))
 
 #check trial number in each exposure and test blocks
 sum.trial.num <- raw %>%
@@ -78,17 +94,43 @@ sum.trial.num <- raw %>%
     values_from = trial_num
   )
 
-#check overall RT across participants
-sum.RT <- raw %>%
-  filter(trial_type != "catch") %>% 
+```
+
+```{r participant-level check and exclusion}
+
+# (1) check catch trial accuracy
+sum.catch_accuracy <- raw %>%
+  filter(trial_type == "catch") %>% 
+  mutate(catch.corr = if_else(word == Response, 1, 0)) %>% 
   group_by(ID) %>% 
   summarise(
-    trial_num = n(),
-    RT = mean(rt),
-    .groups = "drop"
+    total_catch = n(),
+    accuracy = mean(catch.corr),
+    exclude.catch  = accuracy < 0.83
   )
 
-#check valid responses across participants
+data.exclude.catch.low.acc <- sum.catch_accuracy %>% 
+  filter(exclude.catch == TRUE)%>% 
+  distinct(ID)
+
+
+# (2) check labelled trial accuracy
+sum.labelled_accuracy <- raw %>%
+  filter(label_type == "labeled") %>% 
+  mutate(label.corr = if_else(word == Response, 1, 0)) %>% 
+  group_by(ID) %>% 
+  summarise(
+    total_labelled = n(),
+    accuracy = mean(label.corr),
+    exclude.labelled  = accuracy < 0.94
+  )
+
+data.exclude.labelled.low.acc <- sum.labelled_accuracy %>% 
+  filter(exclude.labelled == TRUE)%>% 
+  distinct(ID)
+
+
+# (3a) check valid responses across participants
 sum.resp.num <- raw %>%
   filter(trial_type != "catch", !is.na(resp.num)) %>%
   group_by(ID) %>% 
@@ -97,11 +139,138 @@ sum.resp.num <- raw %>%
     .groups = "drop"
   )
 
-check.na.resp <- raw %>% 
+# (3b) check NA responses across participants
+sum.na.resp <- raw %>% 
   filter(trial_type != "catch", is.na(resp.num)) %>% 
-  select(ID, trial_type, blockID, Response, rt, resp.num)
+  count(ID, name = "na_count") %>%
+  mutate(
+    exclude.high.na = na_count > 21
+  )
+
+data.exclude.high.na <- sum.na.resp %>% 
+  filter(exclude.high.na == TRUE)%>% 
+  distinct(ID)
+
+
+# (4) check overall RT across participants
+sum.subj.RT <- raw %>%
+  filter(trial_type != "catch") %>% 
+  group_by(ID) %>% 
+  summarise(
+    trial_num = n(),
+    subj_mean_RT = mean(rt, na.rm = TRUE),
+    subj_mean_RT.log = mean(rt.log, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    subj_mean_RT.log.z = as.numeric(scale(subj_mean_RT.log)),
+    exclude.by.subj.rt = abs(subj_mean_RT.log.z) > 3
+  )
+
+data.exclude.by.subj.rt <- sum.subj.RT |> 
+  filter(exclude.by.subj.rt == TRUE)%>% 
+  distinct(ID)
+
+
+# (5) check atypical categorization responses based on T1 block
+# note that each VOT token appeared in a test block only once
+sum.cat.diff <- raw %>%
+  filter(trial_type != "catch", blockID == "T1") %>%
+  mutate(
+    vot_group = case_when(
+      VOT <= 30 ~ "short_VOT", #bin responses for VOT= −5, 5, 15, 25, 30 together
+      VOT >= 45 ~ "long_VOT",  #bin responses for VOT= 45, 50, 55, 65, 70 together
+      TRUE ~ "middle_VOT"      #set aside VOT= 35, 40 which might be in the ambiguous region
+    )
+  ) %>%
+  filter(vot_group != "middle_VOT") %>%
+  group_by(ID, vot_group) %>%
+  summarise(mean_resp = mean(resp.num, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = vot_group, values_from = mean_resp) %>%
+  mutate(
+    category_diff = long_VOT - short_VOT,
+    exclude.atypical.cat = category_diff <= 0.3
+  )
+
+flagged.atypical.cat.ids <- sum.cat.diff |> 
+  filter(exclude.atypical.cat == TRUE) %>% 
+  distinct(ID) %>%
+  pull(ID)
+
+# check performance in the T1 block for flagged ids
+raw %>%
+  filter(trial_type != "catch", blockID == "T1") %>%
+  filter(ID %in% flagged.atypical.cat.ids) %>%
+  ggplot(aes(x = VOT, y = resp.num)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE, color = "firebrick") +
+  facet_wrap(~ID, ncol = 4) +
+  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+  theme_bw() +
+  labs(
+    title = "Visualizing 14 Flagged Atypical Participants (T1)",
+    subtitle = "Check if they are true flat lines/random guessers or just shallower slopes",
+    x = "VOT (ms)",
+    y = "Proportion of /t/ Response"
+  )
+
+# check performance averaged across all blocks for flagged ids
+raw %>%
+  filter(trial_type != "catch") %>%
+  filter(ID %in% flagged.atypical.cat.ids) %>%
+  ggplot(aes(x = VOT, y = resp.num)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", se = FALSE, color = "firebrick") +
+  facet_wrap(~ID, ncol = 4) +
+  scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
+  theme_bw() +
+  labs(
+    title = "Visualizing 14 Flagged Atypical Participants (T1)",
+    subtitle = "Check if they are true flat lines/random guessers or just shallower slopes",
+    x = "VOT (ms)",
+    y = "Proportion of /t/ Response"
+  )
+
+#-----
+
+exclude_ids <- bind_rows(
+  data.exclude.catch.low.acc,
+  data.exclude.labelled.low.acc,
+  data.exclude.high.na,
+  data.exclude.by.subj.rt
+) %>% 
+  pull(ID) %>% 
+  unique()
+
+unique(exclude_ids)
+length(unique(exclude_ids))
+
+raw.subj.exclu <- raw %>% 
+  filter(!ID %in% exclude_ids)
 
 ```
+
+```{r trial-level check and exclusion}
+
+#check within-subject RT
+raw.subj.exclu.trim.trial <- raw.subj.exclu |> 
+   group_by(ID) |> 
+   mutate(
+     within.subj.rt.log.z = as.numeric(scale(rt.log)),
+     exclude.trial.rt = abs(within.subj.rt.log.z) > 3
+     ) |>
+   ungroup()
+
+table(raw.subj.exclu.trim.trial$exclude.trial.rt)
+
+df_final <- raw.subj.exclu.trim.trial %>% 
+  filter(!exclude.trial.rt)
+
+```
+
+
+#---main data analysis below---
+
 
 ```{r}
 
