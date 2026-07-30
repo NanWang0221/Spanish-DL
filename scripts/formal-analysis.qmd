@@ -14,7 +14,7 @@ library(magrittr)
 library(ggeffects)
 ```
 
-```{r load data (old)}
+```{r load data (old), include=FALSE}
 
 #currently disable as we'll directly use the preprocessed dataset, but keep this for record
 
@@ -54,7 +54,7 @@ raw <- raw %>% left_join(participant.condition, by = "ID")
 }
 ```
 
-```{r save pre-processed dataset (need to be <100MB to be pushed to github)}
+```{r save pre-processed dataset (need to be <100MB to be pushed to github), include=FALSE}
 
 #already run, no need to implement
 #write.csv(raw, "../data/formal/formal-full-data-preprocessed.csv", row.names = FALSE)
@@ -175,7 +175,7 @@ data.exclude.by.subj.rt <- sum.subj.RT |>
 # (5) check atypical categorization responses based on T1 block
 # note that each VOT token appeared in a test block only once
 sum.cat.diff <- raw %>%
-  filter(trial_type != "catch", blockID == "T1") %>%
+  filter(trial_type != "catch", blockID == "T5") %>%
   mutate(
     vot_group = case_when(
       VOT <= 30 ~ "short_VOT", #bin responses for VOT= −5, 5, 15, 25, 30 together
@@ -199,7 +199,7 @@ flagged.atypical.cat.ids <- sum.cat.diff |>
 
 # check performance in the T1 block for flagged ids
 raw %>%
-  filter(trial_type != "catch", blockID == "T1") %>%
+  filter(trial_type != "catch", blockID == "T5") %>%
   filter(ID %in% flagged.atypical.cat.ids) %>%
   ggplot(aes(x = VOT, y = resp.num)) +
   geom_point(alpha = 0.6) +
@@ -225,7 +225,7 @@ raw %>%
   scale_y_continuous(limits = c(0, 1), breaks = c(0, 0.5, 1)) +
   theme_bw() +
   labs(
-    title = "Visualizing 14 Flagged Atypical Participants (T1)",
+    title = "Visualizing 14 Flagged Atypical Participants (all blocks)",
     subtitle = "Check if they are true flat lines/random guessers or just shallower slopes",
     x = "VOT (ms)",
     y = "Proportion of /t/ Response"
@@ -268,9 +268,7 @@ df_final <- raw.subj.exclu.trim.trial %>%
 
 ```
 
-
 #---main data analysis below---
-
 
 ```{r}
 
