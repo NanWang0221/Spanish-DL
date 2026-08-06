@@ -12,6 +12,8 @@ library(tidyverse)
 library(lme4)
 library(magrittr)
 library(ggeffects)
+library(MASS)
+library(emmeans)
 ```
 
 ```{r load data (old), include=FALSE}
@@ -248,6 +250,9 @@ length(unique(exclude_ids))
 raw.subj.exclu <- raw %>% 
   filter(!ID %in% exclude_ids)
 
+n_distinct(raw$ID) #N=129 originally
+n_distinct(raw.subj.exclu$ID) #N=121 after exclusion
+
 ```
 
 ```{r trial-level check and exclusion}
@@ -261,22 +266,37 @@ raw.subj.exclu.trim.trial <- raw.subj.exclu |>
      ) |>
    ungroup()
 
-table(raw.subj.exclu.trim.trial$exclude.trial.rt)
+table(raw.subj.exclu.trim.trial$exclude.trial.rt) #287/28314=1.01%
 
 df_final <- raw.subj.exclu.trim.trial %>% 
   filter(!exclude.trial.rt)
 
 ```
+```{r check experiment stats after data exclusion}
 
-#---main data analysis below---
+#check counterbalanced list assignment
+update.sum.list.assign <- df_final %>%
+  group_by(list) %>%
+  summarise(n_subjects = n_distinct(ID))
+
+#check exposure condition assignment
+update.sum.condition.assign <- df_final %>%
+  filter(condition!="") %>%
+  group_by(condition) %>%
+  summarise(n_subjects = n_distinct(ID))
+
+```
+
+
+#---preliminary data analysis and visualization below---
 
 ```{r}
 
-participant.condition <- raw %>%
+participant.condition <- df_final %>%
   filter(condition != "") %>%
   distinct(ID, condition)
 
-data.plot <- raw %>%
+data.plot <- df_final %>%
   filter(trial_type != "catch") %>%
  # left_join(participant.condition, by = "ID") %>%
   mutate(blockID = factor(blockID, levels = c("T1","A","T2","B","T3","C","T4","T5","T6")), ID = factor(ID)) %>%
@@ -293,7 +313,7 @@ ggplot(data.plot, aes(blockID, mean.prop, colour = ID, group = ID)) +
 ```{r}
 
 #prepare dataset for crticial trials
-df.critical.trial <- raw %>%
+df.critical.trial <- df_final %>%
   filter(trial_type != "catch", !is.na(resp.num)) %>%
  # left_join(participant.condition, by = "ID") %>%
   mutate(ID = as.factor(ID)) %>%
@@ -315,37 +335,29 @@ df.critical.trial <- raw %>%
                  "Test 3", "Exposure 3", 
                  "Test 4", "Test 5", "Test 6")
     )
+  ) %>%
+  filter(
+    !str_detect(exp_stageID, "Exposure") | 
+    (str_detect(exp_stageID, "Exposure") & label_type == "unlabeled")
   )
-  #filter(blockID %in% c("A", "B", "C"))%>%
-  #filter(blockID %in% c("T1", "T2", "T3", "T4", "T5", "T6"))%>%
+  #for exposure blocks, only unlabeled trials were included for analysis
 
 
-hist(df.critical.trial$rt, breaks=50)
+#separate exposure and test dataset
+df_exposure <- df.critical.trial %>% 
+  filter(str_detect(trial_type, "exposure"))
 
-```
+df_test <- df.critical.trial %>% 
+  filter(str_detect(trial_type, "test"))
 
-```{r}
 
-# categorization response as a function of VOT and exposure condition across blocks
-
-#df.by_subj <- raw %>%
-#  filter(trial_type != "catch", !is.na(resp.num)) %>%
-#  left_join(participant.condition, by = "ID") %>%
-#  group_by(ID, blockID, condition.y, VOT) %>%
-#  summarise(prop_t = mean(resp.num), .groups = "drop")
-
-ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = participant.condition)) +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  stat_summary(fun = mean, geom = "point") +
-  facet_wrap(~ exp_stageID) +
-  labs(x = "VOT (ms)", y = "Proportion /t/")
+hist(df_exposure$rt, breaks=50)
+hist(df_test$rt, breaks=50)
 
 ```
-
 ```{r}
 
 # categorization response by participants
-
 ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = ID, group = ID)) +
   stat_summary(fun = mean, geom = "point", 
                position = position_jitter(width = 0.8, height = 0.02), size=1.5) +
@@ -356,105 +368,652 @@ ggplot(data=df.critical.trial, aes(x=VOT, y=resp.num, colour = ID, group = ID)) 
 
 ```
 
-```{r plot by conditions}
+```{r exposure blocks PSE}
 
-raw %>%
-  filter(trial_type != "catch", !is.na(resp.num)) %>%
-  ggplot(aes(VOT, resp.num, colour = participant.condition)) +
-  stat_summary(fun = mean, geom = "point") +
-  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
-  labs(x = "VOT (ms)", y = "Proportion /t/")
+#full glm model
+fit_exposure <- glmer(
+  resp.num ~ VOT * exp_stageID * participant.condition + 
+    (1 + VOT | ID) + (1 | stim),
+  data = df_exposure,
+  family = binomial,
+  nAGQ = 0,
+  control = glmerControl(optimizer = "bobyqa"),
+  verbose = 1
+  )
 
-```
+summary(fit_exposure)
 
-## Preprocessing and exclusion
 
-```{r exclusion, warning=FALSE}
+#establish predictions for response proportion by VOT, block, and exposure condition
+#exposure_preds <- emmeans(
+#  fit_exposure, 
+#  ~ VOT | exp_stageID * participant.condition,
+#  at = list(VOT = seq(-20, 120, by = 0.1)),
+#  type = "response",
+#  rg.limit = 40000
+#) %>% 
+#  as.data.frame()
 
-#check timedOut trial numbers in the 2AFC task (participants with zero timedOut trial will not be included here) -- code is removed because it has already been dropped in the loading of raw
 
-#Participant-level exclusion
+#derive PSE from the VOT value that corresponds to ~p=0.5
+#pse_exposure <- exposure_preds %>%
+#  group_by(exp_stageID, participant.condition) %>%
+#  filter(abs(prob - 0.5) == min(abs(prob - 0.5))) %>%
+#  rename(PSE = VOT) %>%
+#  ungroup()
 
-# low catch trial accuracy
-# check acc on catch trials (12 catch trials in total)
-# participants with < 60% accuracy on catch trials will be removed
-data.catch.acc <- raw %>% 
-  filter(trial_type == "catch") %>%
-  group_by(ID) %>%
+
+#subj-level PSE
+exposure_subj_info <- df_exposure %>% 
+  distinct(ID, participant.condition)
+
+exposure_subj <- expand_grid(
+  exposure_subj_info,
+  exp_stageID = unique(df_exposure$exp_stageID),
+  VOT = seq(-20, 125, by = 0.1)
+)
+
+exposure_subj$prob <- predict(fit_exposure, newdata = exposure_subj, type = "response", re.form = ~ (1 + VOT | ID))
+
+exposure_subj_pse <- exposure_subj %>%
+  group_by(ID, exp_stageID, participant.condition) %>%
+  filter(abs(prob - 0.5) == min(abs(prob - 0.5))) %>%
+  summarise(PSE_subj = mean(VOT), .groups = "drop")
+
+exposure_pse_group_ci <- exposure_subj_pse %>% #get CI from group mean
+  group_by(exp_stageID, participant.condition) %>%
   summarise(
-    num_of_correct = sum(catch.corr, na.rm = TRUE),
-    exclude.catch  = num_of_correct < 10, ## @will double confirm threshold
-    .groups = "drop")
-
-data.exclude.catch.low.acc <- data.catch.acc %>% 
-  filter(exclude.catch == TRUE)%>% 
-  distinct(ID)
-
-# RT too fast
-# exclude participant with excessive number of RTs < 200ms trials 
-# 7 participants excluded @will, i think it might be too much
-
-#N=30 
-data.rt.all <- raw %>%
-  left_join(data.catch.acc, by = "ID") %>%
-  filter(exclude.catch == FALSE) %>% 
-  filter(trial_type != "catch")
-
-data.subj.too.fast <- data.rt.all %>% 
-  group_by(ID) %>% 
-  summarise(
-    n = sum(rt < 200, na.rm = TRUE),
-    exclude.too.fast = n > 42,  ## @will double confirm threshold
+    N = n(),
+    PSE = mean(PSE_subj, na.rm = TRUE),
+    SD = sd(PSE_subj, na.rm = TRUE),
+    SE = SD / sqrt(N),
+    PSE_grouplowerCI = PSE - 1.96 * SE,
+    PSE_groupupperCI = PSE + 1.96 * SE,
     .groups = "drop"
   )
 
-#N=23
-data.rt.good.subj <- data.rt.all %>%
-  left_join(data.subj.too.fast %>% select(ID, exclude.too.fast), by = "ID") %>%
-  filter(exclude.too.fast == FALSE)
+```
+
+```{r test blocks PSE}
+
+#full glm model
+fit_test <- glmer(
+  resp.num ~ VOT * exp_stageID * participant.condition + 
+    (1 + VOT | ID) + (1 | stim),
+  data = df_test,
+  family = binomial,
+  nAGQ = 0,
+  control = glmerControl(optimizer = "bobyqa"),
+  verbose = 1
+  )
+
+summary(fit_test)
+
+#establish predictions for response proportion by VOT, block, and exposure condition
+#test_preds <- emmeans(
+#  fit_test, 
+#  ~ VOT | exp_stageID * participant.condition,
+#  at = list(VOT = seq(-20, 120, by = 0.1)),
+#  type = "response",
+#  rg.limit = 40000
+#) %>% 
+#  as.data.frame()
 
 
-# check participant-level rt,  all qualified
-#data.rt.part <- raw %>%
-#  left_join(data.cal.acc, by = "ID") %>% 
-#  filter(exclude.catch == FALSE) %>% 
-#  filter(stim != "pleft_ame.mp3" & stim != "pright_ame.mp3") %>%
-#  group_by(ID) %>% 
-#  mutate(rt.log = log10(ifelse(rt <= 0, NA, rt)),
-#    rt.log.z = as.numeric(scale(rt.log)),
-#    rt.log.z.mean = mean(rt.log.z, na.rm = T), 
-#    exclude.by.part.rt = ifelse(abs(scale(rt.log.z.mean)) > 3, TRUE, FALSE))
+#derive PSE from the VOT value that corresponds to ~p=0.5
+#pse_test <- test_preds %>%
+#  group_by(exp_stageID, participant.condition) %>%
+#  filter(abs(prob - 0.5) == min(abs(prob - 0.5))) %>%
+#  rename(PSE = VOT) %>%
+#  ungroup()
 
 
-#Trial level
+#subj-level PSE
+test_subj_info <- df_test %>% 
+  distinct(ID, participant.condition)
 
-# hard cut-off: exclude trials with RTs < 200ms or > 3000ms
-#N=4957 to 4787
-data.rt.trim <- data.rt.good.subj %>%
-  filter(rt > 200 & rt < 3000) %>%
-  mutate(rt.log = log10(rt))
+test_subj <- expand_grid(
+  test_subj_info,
+  exp_stageID = unique(df_test$exp_stageID),
+  VOT = seq(-5, 70, by = 0.1)
+)
 
-#check if any participant mean RT +-3SD of group mean
-#seven people are removed @will
-data.subj.rt.means <- data.rt.trim %>%
-  group_by(ID) %>%
+test_subj$prob <- predict(fit_test, newdata = test_subj, type = "response", re.form = ~ (1 + VOT | ID))
+
+test_subj_pse <- test_subj %>%
+  group_by(ID, exp_stageID, participant.condition) %>%
+  filter(abs(prob - 0.5) == min(abs(prob - 0.5))) %>%
+  summarise(PSE_subj = mean(VOT), .groups = "drop")
+
+test_pse_group_ci <- test_subj_pse %>% #get CI from group mean
+  group_by(exp_stageID, participant.condition) %>%
   summarise(
-    subj_mean_rt.log = mean(rt.log, na.rm = TRUE),
+    N = n(),
+    PSE = mean(PSE_subj, na.rm = TRUE),
+    SD = sd(PSE_subj, na.rm = TRUE),
+    SE = SD / sqrt(N),
+    PSE_grouplowerCI = PSE - 1.96 * SE,
+    PSE_groupupperCI = PSE + 1.96 * SE,
     .groups = "drop"
-  ) %>%
+  )
+
+```
+
+#visualize model-predicted caetgorization curves
+```{r model-predicted categorization curve for exposure blocks}
+
+#establish grid for model prediction (vot x exposure condition x block)
+exposure_vots <- seq(min(df_exposure$VOT, na.rm=TRUE), max(df_exposure$VOT, na.rm=TRUE), by = 0.5)
+exposure_conditions <- unique(df_exposure$participant.condition)
+exposure_stages <- unique(df_exposure$exp_stageID)
+
+exposure_pred_grid <- expand.grid(
+  VOT = exposure_vots,
+  participant.condition = exposure_conditions,
+  exp_stageID = exposure_stages
+)
+
+#log-odds prediction
+exposure_pred_logodds <- predict(
+  fit_exposure, 
+  newdata = exposure_pred_grid, 
+  re.form = NA, 
+  se.fit = TRUE
+)
+
+#convert log-odds back to probability
+exposure_pred_grid <- exposure_pred_grid %>%
   mutate(
-    subj_mean_rt.log.z = as.numeric(scale(subj_mean_rt.log)),
-    exclude.by.subj.rt = ifelse(abs(subj_mean_rt.log.z) > 3, TRUE, FALSE)
+    fit_logodds = exposure_pred_logodds$fit,
+    se_logodds = exposure_pred_logodds$se.fit,
+    pred_resp = plogis(fit_logodds),
+    conf.low = plogis(fit_logodds - 1.96 * se_logodds),
+    conf.high = plogis(fit_logodds + 1.96 * se_logodds)
   )
 
-#exclude trials with RT +-3SD within participants
-#N= 4787 to 4749
-data.preprc <- data.rt.trim %>%
-   group_by(ID) %>%
-   mutate(within.subj.rt.log.z = as.numeric(scale(rt.log))) %>%
-   filter(abs(within.subj.rt.log.z) <= 3) %>%
-   ungroup()
 
+exposure_pred_curves <- ggplot() +
+  stat_summary(
+    data = df.subject.mean %>% filter(exp_stageID %in% exposure_stages),
+    aes(x = VOT, y = resp.num, color = participant.condition),
+    fun = mean, 
+    geom = "point", 
+    alpha = 0.6,
+    size = 1.8
+  ) +
+  geom_ribbon(
+    data = exposure_pred_grid,
+    aes(x = VOT, ymin = conf.low, ymax = conf.high, fill = participant.condition),
+    alpha = 0.15,
+    color = NA
+  ) +
+  geom_line(
+    data = exposure_pred_grid,
+    aes(x = VOT, y = pred_resp, color = participant.condition),
+    linewidth = 1
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey50", alpha = 0.7) +
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  scale_fill_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  facet_wrap(~ exp_stageID) +
+  labs(
+    x = "VOT (ms)", 
+    y = "Proportion /t/",
+    title = "Model-Fitted Categorization Curves (Exposure Blocks)"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.text = element_text(color = "black"),
+    strip.background = element_rect(fill = "grey95")
+  )
 
+print(exposure_pred_curves)
 
 ```
+
+```{r model-predicted categorization curve for test blocks}
+
+#establish grid for model prediction (vot x exposure condition x block)
+test_vots <- seq(min(df_test$VOT, na.rm=TRUE), max(df_test$VOT, na.rm=TRUE), by = 0.5)
+test_conditions <- unique(df_test$participant.condition)
+test_stages <- unique(df_test$exp_stageID)
+
+test_pred_grid <- expand.grid(
+  VOT = test_vots,
+  participant.condition = test_conditions,
+  exp_stageID = test_stages
+)
+
+#log-odds prediction
+test_pred_logodds <- predict(
+  fit_test, 
+  newdata = test_pred_grid, 
+  re.form = NA, 
+  se.fit = TRUE
+)
+
+#convert log-odds back to probability
+test_pred_grid <- test_pred_grid %>%
+  mutate(
+    fit_logodds = test_pred_logodds$fit,
+    se_logodds = test_pred_logodds$se.fit,
+    pred_resp = plogis(fit_logodds),
+    conf.low = plogis(fit_logodds - 1.96 * se_logodds),
+    conf.high = plogis(fit_logodds + 1.96 * se_logodds)
+  )
+
+
+test_pred_curves <- ggplot() +
+  stat_summary(
+    data = df.subject.mean %>% filter(exp_stageID %in% test_stages),
+    aes(x = VOT, y = resp.num, color = participant.condition),
+    fun = mean, 
+    geom = "point", 
+    alpha = 0.6,
+    size = 1.8
+  ) +
+  geom_ribbon(
+    data = test_pred_grid,
+    aes(x = VOT, ymin = conf.low, ymax = conf.high, fill = participant.condition),
+    alpha = 0.15,
+    color = NA
+  ) +
+  geom_line(
+    data = test_pred_grid,
+    aes(x = VOT, y = pred_resp, color = participant.condition),
+    linewidth = 1
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey50", alpha = 0.7) +
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  scale_fill_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  facet_wrap(~ exp_stageID) +
+  labs(
+    x = "VOT (ms)", 
+    y = "Proportion /t/",
+    title = "Model-Fitted Categorization Curves (Test Blocks)"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    legend.title = element_blank(),
+    axis.text = element_text(color = "black"),
+    strip.background = element_rect(fill = "grey95")
+  )
+
+print(test_pred_curves)
+
+```
+```{r combine plots - A}
+
+all_pred_grid <- bind_rows(exposure_pred_grid, test_pred_grid)
+stages_order_A <- c("Test 1", "Exposure 1", "Test 2", "Exposure 2", "Test 3", "Exposure 3", "Test 4")
+
+all_pred_grid_A <- all_pred_grid %>%
+  mutate(exp_stageID = factor(exp_stageID, levels = stages_order_A))
+
+df.subject.mean_A <- df.subject.mean %>%
+  mutate(exp_stageID = factor(exp_stageID, levels = stages_order_A))
+
+ggplot() +
+  geom_ribbon(
+    data = all_pred_grid_A %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, ymin = conf.low, ymax = conf.high, fill = participant.condition),
+    alpha = 0.15, color = NA
+  ) +
+  geom_line(
+    data = all_pred_grid_A %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, y = pred_resp, color = participant.condition),
+    linewidth = 0.8
+  ) +
+  stat_summary(
+    data = df.subject.mean_A %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, y = resp.num, color = participant.condition),
+    fun = mean, geom = "point", alpha = 0.6, size = 1.5
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey70") +
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  scale_fill_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  facet_wrap(~ exp_stageID, nrow = 1, scales = "free_x") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold")
+  )
+
+```
+```{r combine plots - B}
+
+stages_order_B <- c("Test 4", "Test 5", "Test 6")
+
+all_pred_grid_B <- all_pred_grid %>%
+  mutate(exp_stageID = factor(exp_stageID, levels = stages_order_B))
+
+df.subject.mean_B <- df.subject.mean %>%
+  mutate(exp_stageID = factor(exp_stageID, levels = stages_order_B))
+
+ggplot() +
+  geom_ribbon(
+    data = all_pred_grid_B %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, ymin = conf.low, ymax = conf.high, fill = participant.condition),
+    alpha = 0.15, color = NA
+  ) +
+  geom_line(
+    data = all_pred_grid_B %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, y = pred_resp, color = participant.condition),
+    linewidth = 0.8
+  ) +
+  stat_summary(
+    data = df.subject.mean_B %>% filter(!is.na(exp_stageID)),
+    aes(x = VOT, y = resp.num, color = participant.condition),
+    fun = mean, geom = "point", alpha = 0.6, size = 1.5
+  ) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey70") +
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  scale_fill_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  facet_wrap(~ exp_stageID, nrow = 1, scales = "free_x") +
+  theme_bw() +
+  theme(
+    legend.position = "top",
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold")
+  )
+
+```
+
+#visualize proportion of adaptation
+```{r define expected learning in idealized listeners' based on TJ2025, Figure S6}
+
+baseline_prior <- 44.53 #roughly
+
+baseline_test1 <- test_pse_group_ci %>%
+  filter(exp_stageID == "Test 1") %>%
+  dplyr::select(participant.condition, PSE_test1 = PSE) #use as baseline to calculate proportion of adaptation
+
+#exposure
+ideal_exposure <- tibble(
+  participant.condition = c("expo+20ms", "expo-10ms", "expo-20ms"),
+  expected_pse_exposure = c(64.49, 34.35, 24.83)
+)
+
+#test
+ideal_test <- tibble(
+  participant.condition = c("expo+20ms", "expo-10ms", "expo-20ms"),
+  expected_pse_test = c(64.59, 34.53, 24.49)
+)
+
+```
+
+```{r proportion of adaptation (ideal shift endpoint measured against prior)- exposure and test blocks}
+
+pse_exposure_with_pct.1 <- exposure_pse_group_ci %>%
+  left_join(baseline_test1, by = "participant.condition") %>%
+  left_join(ideal_exposure, by = "participant.condition") %>%
+  mutate(
+    pct = (PSE - PSE_test1) / (expected_pse_exposure - PSE_test1),
+    pct_label = sprintf("%.1f%%", pct * 100),
+    block_type = "Exposure"
+  )
+
+pse_test_with_pct.1 <- test_pse_group_ci %>%
+  left_join(baseline_test1, by = "participant.condition") %>%
+  left_join(ideal_test, by = "participant.condition") %>%
+  mutate(
+    pct = (PSE - PSE_test1) / (expected_pse_test - PSE_test1),
+    pct_label = sprintf("%.1f%%", pct * 100),
+    block_type = "Test"
+  )
+
+
+pse_combined_with_pct.1 <- bind_rows(pse_exposure_with_pct, pse_test_with_pct) %>%
+  mutate(exp_stageID = factor(exp_stageID, levels = c(
+    "Test 1", "Exposure 1", 
+    "Test 2", "Exposure 2", 
+    "Test 3", "Exposure 3", 
+    "Test 4", "Test 5", "Test 6"
+  ))) %>% 
+  arrange(participant.condition, exp_stageID)
+
+```
+
+
+```{r proportion plot against ideal listeners (ideal shift endpoint measured against prior)}
+
+
+# Idealized Learner (based on values in TJ2025-supplementary material-figureS6)
+ideal_lines <- data.frame(
+  participant.condition = c("expo+20ms", "expo-10ms", "expo-20ms"),
+  yintercept = c(64.59, 34.53, 24.49),
+  label = c("+21 (100%)\nidealized learner", 
+            "-9 (100%)\nidealized learner", 
+            "-18 (100%)\nidealized learner")
+)
+
+
+p_fig.idealbyPrior <- ggplot(pse_combined_with_pct.1, aes(x = exp_stageID, y = PSE, group = participant.condition, color = participant.condition)) +
+  
+  geom_rect(
+    xmin = -Inf, xmax = Inf,
+    ymin = 43.53, ymax = 45.53,
+    fill = "grey85", color = NA, alpha = 0.5,
+    inherit.aes = FALSE
+  ) +
+  
+  geom_hline(
+    data = ideal_lines, 
+    aes(yintercept = yintercept, color = participant.condition),
+    linetype = "dashed", alpha = 0.6, linewidth = 0.6) +
+  
+  geom_text(
+    data = ideal_lines,
+    aes(x = Inf, y = yintercept, label = label, color = participant.condition),
+    hjust = -0.15,
+    vjust = 0.5,
+    size = 3.2, 
+    fontface = "bold",
+    lineheight = 0.85,
+    inherit.aes = FALSE,
+    show.legend = FALSE
+  ) +
+  
+  geom_errorbar(
+    aes(ymin = PSE_grouplowerCI, ymax = PSE_groupupperCI),
+    width = 0.15,
+    linewidth = 0.7,
+    position = position_dodge(0.2)
+  ) +
+
+  geom_line(linewidth = 0.9, position = position_dodge(0.2)) +
+  geom_point(size = 2.5, position = position_dodge(0.2)) +
+  
+  geom_label(
+    data = filter(pse_combined_with_pct.1, exp_stageID != "Test 1"),
+    aes(label = pct_label),
+    vjust = -0.6,
+    label.padding = unit(0.15, "lines"),
+    label.size = 0.2,
+    fill = "white",
+    alpha = 0.85,
+    show.legend = FALSE,
+    position = position_dodge(0.2)
+  ) +
+  
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  
+  labs(
+    x = "Block",
+    y = "PSE (ms VOT)",
+    title = "Perceptual Boundary Shift across Experimental Blocks",
+  ) +
+  coord_cartesian(clip = "off") + 
+  
+  theme_bw() +
+  theme(
+    plot.margin = margin(t = 10, r = 85, b = 10, l = 10, unit = "pt"),
+    
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1, size = 10, color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    
+    panel.grid.major.x = element_line(color = "grey92"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_fig.idealbyPrior)
+
+```
+
+```{r proportion of adaptation (ideal shift endpoint measured against test 1) - exposure and test blocks}
+
+#consider ideal delta rather than fixed endpoints in FigS6
+ideal_deltas <- tibble(
+  participant.condition = c("expo+20ms", "expo-10ms", "expo-20ms"),
+  ideal_delta = c(21, -9, -18)
+)
+
+pse_combined_with_pct.2 <- pse_combined_with_pct.1 %>%
+  left_join(ideal_deltas, by = "participant.condition") %>%
+  mutate(
+    ideal_endpoint_from_test1 = PSE_test1 + ideal_delta,
+    shift_from_test1 = PSE - PSE_test1,
+    pct_by_ideal_endpoint_from_test1 = shift_from_test1 / ideal_delta
+  )
+
+```
+
+```{r proportion plot against ideal listeners (ideal shift endpoint measured against test 1)}
+
+pse_combined_with_pct.2 <- pse_combined_with_pct.2 %>%
+  mutate(
+    pct_label = if_else(
+      exp_stageID == "Test 1", 
+      "", 
+      sprintf("%.1f%%", pct_by_ideal_endpoint_from_test1 * 100)
+    )
+  )
+
+ideal_lines_dynamic <- pse_combined_with_pct.2 %>%
+  distinct(participant.condition, ideal_endpoint_from_test1, ideal_delta) %>%
+  mutate(
+    yintercept = ideal_endpoint_from_test1,
+    label = sprintf("%+d (100%%)\nidealized learner", ideal_delta)
+  )
+
+
+p_fig.idealbytest1 <- ggplot(pse_combined_with_pct.2, aes(x = exp_stageID, y = PSE, group = participant.condition, color = participant.condition)) +
+  
+  geom_rect(
+    xmin = -Inf, xmax = Inf,
+    ymin = 43.53, ymax = 45.53,
+    fill = "grey85", color = NA, alpha = 0.5,
+    inherit.aes = FALSE
+  ) +
+  
+  geom_hline(
+    data = ideal_lines_dynamic, 
+    aes(yintercept = yintercept, color = participant.condition),
+    linetype = "dashed", alpha = 0.6, linewidth = 0.6
+  ) +
+  
+  geom_text(
+    data = ideal_lines_dynamic,
+    aes(x = Inf, y = yintercept, label = label, color = participant.condition),
+    hjust = -0.15,
+    vjust = 0.5,
+    size = 3.2, 
+    fontface = "bold",
+    lineheight = 0.85,
+    inherit.aes = FALSE,
+    show.legend = FALSE
+  ) +
+  
+  geom_errorbar(
+    aes(ymin = PSE_grouplowerCI, ymax = PSE_groupupperCI),
+    width = 0.15,
+    linewidth = 0.7,
+    position = position_dodge(0.2)
+  ) +
+  
+  geom_line(linewidth = 0.9, position = position_dodge(0.2)) +
+  geom_point(size = 2.5, position = position_dodge(0.2)) +
+  
+  geom_label(
+    data = filter(pse_combined_with_pct.2, exp_stageID != "Test 1"),
+    aes(label = pct_label),
+    vjust = -0.6,
+    label.padding = unit(0.15, "lines"),
+    label.size = 0.2,
+    fill = "white",
+    alpha = 0.85,
+    show.legend = FALSE,
+    position = position_dodge(0.2)
+  ) +
+  
+  scale_color_manual(
+    breaks = c("expo-20ms", "expo-10ms", "expo+20ms"),
+    values = c("expo-20ms" = "#D32F2F", "expo-10ms" = "#2E7D32", "expo+20ms" = "#1E88E5")
+  ) +
+  
+  labs(
+    x = "Block",
+    y = "PSE (ms VOT)",
+    title = "Perceptual Boundary Shift across Experimental Blocks (Test 1 Baseline)"
+  ) +
+  coord_cartesian(clip = "off") + 
+  
+  theme_bw() +
+  theme(
+    plot.margin = margin(t = 10, r = 85, b = 10, l = 10, unit = "pt"),
+    
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1, size = 10, color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    
+    panel.grid.major.x = element_line(color = "grey92"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_fig.idealbytest1)
+
+```
+
+
