@@ -1,0 +1,410 @@
+---
+title: "chodroff2017"
+author: "Nan"
+format:
+  pdf:
+    toc: true
+    toc-depth: 4
+    number-sections: true
+    include-in-header:
+      text: |
+        \usepackage{underscore}
+        \newcommand{\todo}[1]{\textbf{\color{red}[TODO: #1]}}
+        \newcommand{\todoflorian}[1]{\textbf{\color{blue}[TODO florian: #1]}}
+fontsize: 10pt
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+library(Hmisc)     # mean_cl_boot, for bootstrapped confidence intervals
+library(knitr)     # kable, for tables in the rendered report
+library(broom)     # tidy(), to collect t-test results into a data frame
+
+# format a p-value APA-style for inline reporting
+format_p <- function(p.value) {
+  if (p.value < .001) "< .001" else paste0("= ", formatC(p.value, format = "f", digits = 3))
+}
+
+# compact "t(df) = x.xx, p ..." string from one tidy t-test row, for inline use
+report_row <- function(tidy.row) {
+  sprintf("*t*(%.1f) = %.2f, *p* %s",
+          tidy.row$parameter, tidy.row$statistic, format_p(tidy.row$p.value))
+}
+
+# unit label for each measure, used in the table and the figure strips
+measure.unit <- c("VOT" = "VOT (ms)",
+                  "Vowel duration" = "Vowel duration (ms)",
+                  "F0" = "F0 (Hz)")
+```
+
+# Dataset overview
+
+The dataset accompanies Chodroff & Wilson's work on the structure of laryngeal contrast and voice-onset time in American English. Twenty-eight native English speakers produced monosyllabic words beginning with one of the six English stops (/p t k b d g/). For every stop token the recordings were force-aligned and a Praat script measured the stop interval, the duration of the following sonorant, the containing word, and a ten-point fundamental frequency contour sampled every 5 ms from vowel onset.
+
+## Measures analysed
+
+We contrast three acoustic measures across talker gender:
+
+- **VOT** (ms) — the stop's voice-onset time, i.e. the interval from burst release to voicing onset, the standard voicing cue for stops. In this corpus the annotated stop interval *is* the VOT, so VOT and the stop's own segment duration are the same quantity here.
+- **Vowel duration** (ms) — the length of the vowel that follows the stop, taken from the following-sonorant duration. As the README notes, once the consonant-cluster ("L") tokens are removed the following sonorant is always the vowel.
+- **F0** (Hz) — the fundamental frequency at vowel onset, summarised as the mean of the first five 5-ms samples (the first 25 ms of the vowel), following the corpus convention. F0 largely reflects vocal-fold anatomy, so it is included partly as a reference measure (see the interpretation).
+
+VOT is a property of the consonant's laryngeal timing, vowel duration reflects the length of the following vowel, and F0 reflects vocal-fold vibration rate. Comparing all three shows whether a gender difference lives in the consonant cue, the vowel, the pitch, or some combination.
+
+## Preprocessing
+
+The raw data is preprocessed following the steps below:
+
+- Select the target stops, i.e. /t/, /d/;
+- Remove consonant-cluster tokens. Cluster words such as *KLOT* or *PLOT* (CLVC) are flagged by a following sonorant of `"L"`; these are dropped so that the segment following every retained stop is a vowel and all three measures are comparable.
+- VOT and the following-vowel duration are stored in seconds and re-expressed in milliseconds.
+- The ten F0 samples are stored as text with `"--undefined--"` where Praat could not track pitch. These frames are read as missing, as are physiologically implausible values (outside 50–400 Hz, which are octave-tracking artefacts). F0 is then summarised as the mean of the first five samples (first 25 ms of the vowel); the few tokens left with no usable F0 sample are dropped from the F0 comparison only.
+
+
+```{r load-preprocessing}
+
+data.dir     <- "../data/chodroff2017"
+cue.file     <- file.path(data.dir, "cueAnalysis_engCVC.txt")
+speaker.file <- file.path(data.dir, "engCVC_speakerList.csv")
+
+column.names <- c("file", "stop", "start", "end", "interval", "vot",
+                  "following.sonorant", "sonorant.dur", "word", "word.dur",
+                  paste0("f0_", 1:10))
+
+engcvc.raw <- read_tsv(cue.file, col_names = column.names, show_col_types = FALSE)
+
+# keep /t/ and /d/, drop CLVC (following "L"), derive speaker; measures in their units
+td.before.cluster.removal <- engcvc.raw %>%
+  filter(stop %in% c("T", "D"))
+
+td.tokens <- td.before.cluster.removal %>%
+  filter(following.sonorant != "L") %>%
+  # F0 columns are text with "--undefined--". Make them numeric, and set both
+  # undefined frames and physiologically implausible values (outside 50-400 Hz,
+  # i.e. Praat octave-tracking errors) to NA so they drop out of the average.
+  mutate(across(f0_1:f0_5, ~ {
+    hz <- suppressWarnings(as.numeric(na_if(.x, "--undefined--")))
+    ifelse(!is.na(hz) & hz >= 50 & hz <= 400, hz, NA_real_)
+  })) %>%
+  mutate(subj         = str_remove(file, "_edited"),
+         vot.ms       = vot * 1000,                              # consonant voicing cue
+         vowel.dur.ms = sonorant.dur * 1000,                     # following-vowel duration
+         f0.mean.hz   = rowMeans(across(f0_1:f0_5), na.rm = TRUE),# mean F0 over first 25 ms
+         stop         = factor(stop, levels = c("T", "D")))
+
+
+# attach gender, keep known-gender speakers only
+speaker.gender <- read_csv(speaker.file, show_col_types = FALSE)
+
+td.tokens.gendered <- td.tokens %>%
+  left_join(speaker.gender, by = "subj") %>%
+  filter(!is.na(gender)) %>%
+  mutate(gender = factor(gender, levels = c("female", "male")))
+
+
+# reshape to long: one row per token x measure, so the pipeline below is written
+# once and carries the extra `measure` grouping. rowMeans of an all-undefined
+# token gives NaN (caught by is.na), so a value-drop leaves F0-less tokens out
+# of the F0 rows only.
+measures.long <- td.tokens.gendered %>%
+  transmute(subj, gender, stop,
+            VOT              = vot.ms,
+            `Vowel duration` = vowel.dur.ms,
+            F0               = f0.mean.hz) %>%
+  pivot_longer(cols = c(VOT, `Vowel duration`, F0),
+               names_to = "measure", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  mutate(measure = factor(measure, levels = c("VOT", "Vowel duration", "F0")))
+
+
+# Bookkeeping counts, for the auditable prose that follows
+n.tokens.raw            <- nrow(engcvc.raw)
+n.cluster.removed       <- sum(td.before.cluster.removal$following.sonorant == "L")
+n.unknown.gender.tokens <- nrow(td.tokens) - nrow(td.tokens.gendered)
+n.td.tokens             <- nrow(td.tokens.gendered)
+n.td.speakers           <- n_distinct(td.tokens.gendered$subj)
+n.f0.dropped            <- sum(is.nan(td.tokens.gendered$f0.mean.hz))
+
+# Sanity checks — durations positive, F0 in a plausible human range, all labelled
+stopifnot(all(td.tokens.gendered$vot.ms       > 0),
+          all(td.tokens.gendered$vowel.dur.ms > 0),
+          all(filter(measures.long, measure == "F0")$value %>% between(50, 400)),
+          all(!is.na(measures.long$gender)))
+
+```
+
+From the `r n.tokens.raw` raw stop tokens, restricting to /t/ and /d/ and dropping
+`r n.cluster.removed` consonant-cluster tokens leaves `r n.td.tokens` tokens from
+`r n.td.speakers` talkers (`r n.f0.dropped` of which lack a usable F0 sample and
+are excluded from the F0 comparison only). Their distribution across stop and
+talker gender is shown in Table \ref{tbl-counts}.
+
+```{r}
+#| label: tbl-counts
+#| tbl-cap: "Number of /t/ and /d/ tokens and contributing talkers, by talker gender, in the final analysis set."
+counts.by.cell <- td.tokens.gendered %>%
+  group_by(stop, gender) %>%
+  summarise(n.tokens   = n(),
+            n.speakers = n_distinct(subj),
+            .groups = "drop")
+
+kable(counts.by.cell,
+      col.names = c("Stop", "Gender", "Tokens", "Talkers"),
+      align = "llrr")
+```
+
+# Analyze phoneme duration, VOT, and F0
+
+## Goal and motivation
+
+The goal is to compare three acoustic measures — the stop's **VOT**, the following
+**vowel duration**, and the vowel-onset **F0** — between female and male talkers,
+separately for /t/ and /d/. VOT indexes the laryngeal timing of the consonant,
+vowel duration indexes the length of the following vowel, and F0 indexes the rate
+of vocal-fold vibration. Examining all three lets us see which properties carry a
+gender difference. F0 is expected to differ substantially for anatomical reasons
+and so serves as much as a reference (a "does the gender split behave as known?"
+check) as a finding in its own right.
+
+The comparison is made on **per-talker means rather than raw tokens**. Each talker
+contributes many tokens, and tokens from the same talker are not independent;
+collapsing to one mean per talker (for each stop and measure) yields a single
+independent observation per talker, the appropriate unit for a between-groups test.
+We then compare the female and male talker means with a two-sided **Welch
+two-sample t-test** (unequal-variance form), run once for each of the six
+stop × measure combinations.
+
+## Results
+
+```{r analysis}
+# ---------------------------------------------------------------------------
+# Speaker-level means: one mean per talker x stop x measure = the analysis unit
+# ---------------------------------------------------------------------------
+speaker.means <- measures.long %>%
+  group_by(subj, gender, stop, measure) %>%
+  summarise(mean.value = mean(value),
+            n.tokens   = n(),
+            .groups = "drop")
+
+# ---------------------------------------------------------------------------
+# Group-level summary: mean of the talker means, and SD across talkers
+# ---------------------------------------------------------------------------
+group.summary <- speaker.means %>%
+  group_by(measure, stop, gender) %>%
+  summarise(n.speakers        = n(),
+            mean.value        = mean(mean.value),
+            sd.across.talkers = sd(mean.value),
+            .groups = "drop")
+
+# ---------------------------------------------------------------------------
+# Welch t-test of female vs. male talker means, once per stop x measure.
+# broom::tidy() collects all six tests into one data frame. In each row
+# estimate1 = female mean, estimate2 = male mean, estimate = female - male.
+# ---------------------------------------------------------------------------
+test.results <- speaker.means %>%
+  group_by(measure, stop) %>%
+  group_modify(~ tidy(t.test(mean.value ~ gender, data = .x))) %>%
+  ungroup()
+
+# individual rows pulled out for inline reporting
+vot.t.row   <- filter(test.results, measure == "VOT",            stop == "T")
+vot.d.row   <- filter(test.results, measure == "VOT",            stop == "D")
+vowel.t.row <- filter(test.results, measure == "Vowel duration", stop == "T")
+vowel.d.row <- filter(test.results, measure == "Vowel duration", stop == "D")
+f0.t.row    <- filter(test.results, measure == "F0",             stop == "T")
+f0.d.row    <- filter(test.results, measure == "F0",             stop == "D")
+```
+
+```{r}
+#| label: tbl-results
+#| tbl-cap: "Female vs. male comparison of VOT, vowel duration, and F0 for /t/ and /d/, on per-talker means. Columns give the female and male group means, their difference (female - male), the Welch t statistic, degrees of freedom, p-value, and the 95% CI on the difference. Units follow the Measure column: ms for VOT and vowel duration, Hz for F0."
+test.results %>%
+  transmute(Measure     = measure.unit[as.character(measure)],
+            Stop        = recode(stop, T = "/t/", D = "/d/"),
+            Female      = round(estimate1, 1),
+            Male        = round(estimate2, 1),
+            Diff        = round(estimate, 1),
+            t           = round(statistic, 2),
+            df          = round(parameter, 1),
+            p           = ifelse(p.value < .001, "< .001",
+                                 formatC(p.value, format = "f", digits = 3)),
+            `95% CI`    = sprintf("[%.1f, %.1f]", conf.low, conf.high)) %>%
+  arrange(Measure, Stop) %>%
+  kable(align = "llrrrrrrl")
+```
+
+The three measures behave differently. **VOT** shows a significant female-longer
+difference for both stops: /t/ `r round(vot.t.row$estimate1, 1)` vs.
+`r round(vot.t.row$estimate2, 1)` ms (`r report_row(vot.t.row)`); /d/
+`r round(vot.d.row$estimate1, 1)` vs. `r round(vot.d.row$estimate2, 1)` ms
+(`r report_row(vot.d.row)`). **Vowel duration** shows *no* reliable gender
+difference for either stop (/t/ `r report_row(vowel.t.row)`; /d/
+`r report_row(vowel.d.row)`), with confidence intervals spanning zero. **F0**, as
+expected, is much higher for female talkers — /t/ `r round(f0.t.row$estimate1, 0)`
+vs. `r round(f0.t.row$estimate2, 0)` Hz (`r report_row(f0.t.row)`); /d/
+`r round(f0.d.row$estimate1, 0)` vs. `r round(f0.d.row$estimate2, 0)` Hz
+(`r report_row(f0.d.row)`) — a difference of roughly
+`r round(f0.t.row$estimate1 / f0.t.row$estimate2, 2)`× in pitch. The full set of
+estimates and tests is in Table \ref{tbl-results}, and the underlying per-talker
+distributions are shown in Figure \ref{fig-all}.
+
+```{r}
+#| label: fig-all
+#| fig-cap: "VOT (top, ms), following-vowel duration (middle, ms), and vowel-onset F0 (bottom, Hz) by talker gender, for /t/ (left) and /d/ (right). Each coloured point is one talker's mean; the black point and bars are the group mean and a bootstrapped 95% confidence interval across talkers (mean_cl_boot). Every panel has its own y-axis, and the unit differs by row (see the strip labels). Female and male talkers separate clearly on VOT and F0, but overlap on vowel duration."
+#| fig-width: 8
+#| fig-height: 9.5
+
+# palette defined once so gender reads the same colour in every figure
+gender.palette <- c(female = "#C2185B", male = "#1565C0")
+
+ggplot(speaker.means, aes(x = gender, y = mean.value, colour = gender)) +
+  # each dot = one talker's mean for this stop x measure
+  geom_jitter(width = 0.12, height = 0, alpha = 0.5, size = 2) +
+  # group mean + bootstrapped 95% CI across talkers
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar",
+               width = 0.15, linewidth = 0.8, colour = "black") +
+  stat_summary(fun = mean, geom = "point", size = 3, colour = "black") +
+  facet_wrap(~ measure + stop, scales = "free_y", nrow = 3,
+             labeller = labeller(measure = as_labeller(measure.unit),
+                                 stop    = as_labeller(c(T = "/t/", D = "/d/")))) +
+  scale_colour_manual(values = gender.palette) +
+  labs(x = "Talker gender", y = "Talker mean (unit varies by row)", colour = "Gender") +
+  theme_bw(13) +
+  theme(legend.position = "none")
+```
+
+## Interpretation
+
+Bringing the three measures together sharpens the picture. The gender difference
+is **carried by the consonant's VOT and by F0, but not by vowel duration**. Female
+talkers have reliably longer VOT for both stops (about 20 ms for the aspirated
+/t/, smaller in absolute terms for /d/), and much higher F0 — roughly
+`r round(f0.t.row$estimate1 / f0.t.row$estimate2, 2)`× that of male talkers — yet
+their following vowels are no longer than male talkers'.
+
+The F0 and VOT differences are not on the same footing, however. The F0 gap is
+very large and physiologically expected: adult female talkers have shorter, less
+massive vocal folds that vibrate faster, so a higher F0 is essentially guaranteed
+and functions here as a sanity check that the gender labelling behaves as known,
+rather than as a discovery about /t/ and /d/. The VOT difference is the more
+substantive result: it concerns the *timing* of the consonant rather than talker
+anatomy, and the fact that vowel duration does *not* differ argues against a simple
+"female talkers lengthen everything" account — if that were the mechanism, the
+vowels would lengthen too.
+
+Two caveats temper the result: the tests rest on `r n.td.speakers` talkers, so the
+confidence intervals are correspondingly wide; and because talker gender is
+confounded with any anatomical or speaking-rate differences that covary with it in
+this sample, the analysis establishes an association rather than a cause. Within
+those limits, talker gender is a meaningful source of variation in the VOT (and,
+trivially, the F0) of /t/ and /d/ in the `engCVC` corpus, but not in the duration
+of the following vowel.
+
+# Correlation between VOT and vowel duration
+
+## Goal and motivation
+
+Having compared the measures separately across gender, we now ask whether two of
+them covary *within* a token: do stop tokens with longer VOT also have longer
+following vowels? Two design choices shape the analysis. First, the correlation is
+computed **within each stop**. /t/ has both a long VOT and its own vowel-duration
+distribution, so pooling /t/ and /d/ would create a between-category correlation
+that says nothing about the within-category relationship — a Simpson's-paradox
+trap. Second, we examine the relationship at two levels: the **token level** (every
+stop token) and the **talker-mean level** (one point per talker), since "are
+long-VOT *tokens* long-vowel tokens?" and "do long-VOT *talkers* have long vowels?"
+are different questions.
+
+## Token-level relationship
+
+```{r}
+#| label: fig-cor-token
+#| fig-cap: "Token-level relationship between VOT (x) and following-vowel duration (y), for /t/ (left) and /d/ (right). Each point is one stop token; the line is an OLS fit with its 95% confidence band, and the annotation gives the within-stop Pearson correlation. The x-axis is free between panels because /t/ and /d/ occupy different VOT ranges. Both correlations are essentially zero."
+#| fig-width: 8
+#| fig-height: 4
+
+# Pearson r of VOT vs. vowel duration within each stop (reused inline below)
+cor.by.stop.token <- td.tokens.gendered %>%
+  group_by(stop) %>%
+  summarise(r = cor(vot.ms, vowel.dur.ms),
+            p = cor.test(vot.ms, vowel.dur.ms)$p.value,
+            x = min(vot.ms), y = max(vowel.dur.ms),   # anchor annotation to panel
+            .groups = "drop") %>%
+  mutate(label = sprintf("r = %.2f, p %s", r,
+                         ifelse(p < .001, "< .001",
+                                paste0("= ", formatC(p, format = "f", digits = 3)))))
+
+cor.tok.t <- filter(cor.by.stop.token, stop == "T")
+cor.tok.d <- filter(cor.by.stop.token, stop == "D")
+
+ggplot(td.tokens.gendered, aes(x = vot.ms, y = vowel.dur.ms)) +
+  geom_point(alpha = 0.25, size = 1) +
+  geom_smooth(method = "lm", se = TRUE, colour = "grey20") +
+  geom_text(data = cor.by.stop.token, aes(x = x, y = y, label = label),
+            hjust = 0, vjust = 1, size = 4, fontface = "italic") +
+  facet_wrap(~ stop, scales = "free_x",
+             labeller = as_labeller(c(T = "/t/", D = "/d/"))) +
+  labs(x = "VOT (ms)", y = "Following-vowel duration (ms)") +
+  theme_bw(13)
+```
+
+At the token level the two durations are essentially unrelated within each stop:
+the correlation is `r sprintf("%.2f", cor.tok.t$r)` for /t/ (*p* `r format_p(cor.tok.t$p)`)
+and `r sprintf("%.2f", cor.tok.d$r)` for /d/ (*p* `r format_p(cor.tok.d$p)`). These are
+distinguishable from zero only because each stop contributes about a thousand
+tokens; they explain on the order of 1–3% of the variance, so there is no
+practically meaningful token-level coupling between VOT and the length of the
+following vowel.
+
+## Talker-level relationship
+
+```{r}
+#| label: fig-cor-speaker
+#| fig-cap: "Talker-level relationship between mean VOT (x) and mean following-vowel duration (y): one point per talker, for /t/ (left) and /d/ (right), with an OLS fit, its 95% band, and the within-stop Pearson correlation across talkers. Free x-axis as above. Neither correlation is reliable."
+#| fig-width: 8
+#| fig-height: 4
+
+# one point per talker x stop
+speaker.xy <- td.tokens.gendered %>%
+  group_by(subj, stop) %>%
+  summarise(vot = mean(vot.ms), vowel = mean(vowel.dur.ms), .groups = "drop")
+
+cor.by.stop.speaker <- speaker.xy %>%
+  group_by(stop) %>%
+  summarise(r = cor(vot, vowel),
+            p = cor.test(vot, vowel)$p.value,
+            x = min(vot), y = max(vowel), .groups = "drop") %>%
+  mutate(label = sprintf("r = %.2f, p %s", r,
+                         ifelse(p < .001, "< .001",
+                                paste0("= ", formatC(p, format = "f", digits = 3)))))
+
+cor.spk.t <- filter(cor.by.stop.speaker, stop == "T")
+cor.spk.d <- filter(cor.by.stop.speaker, stop == "D")
+
+ggplot(speaker.xy, aes(x = vot, y = vowel)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE, colour = "grey20") +
+  geom_text(data = cor.by.stop.speaker, aes(x = x, y = y, label = label),
+            hjust = 0, vjust = 1, size = 4, fontface = "italic") +
+  facet_wrap(~ stop, scales = "free_x",
+             labeller = as_labeller(c(T = "/t/", D = "/d/"))) +
+  labs(x = "Talker mean VOT (ms)", y = "Talker mean vowel duration (ms)") +
+  theme_bw(13)
+```
+
+The talker-level picture agrees: across the `r n.td.speakers` talkers the
+correlation between mean VOT and mean vowel duration is `r sprintf("%.2f", cor.spk.t$r)`
+for /t/ (*p* `r format_p(cor.spk.t$p)`) and `r sprintf("%.2f", cor.spk.d$r)` for /d/
+(*p* `r format_p(cor.spk.d$p)`), neither reliably different from zero. So talkers
+with longer VOT are not systematically the ones with longer vowels — consistent
+with the earlier finding that the gender effect lives in VOT specifically and does
+not carry over to vowel duration.
+
