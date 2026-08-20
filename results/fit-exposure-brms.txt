@@ -1,0 +1,492 @@
+ Family: mixture(bernoulli, bernoulli) 
+  Links: mu1 = logit; mu2 = logit; theta1 = identity; theta2 = identity 
+Formula: resp.num ~ 1 
+         mu1 ~ 0 + offset(0)
+         mu2 ~ 1 + VOT_gs * participant.condition * exp_stageID + (1 + VOT_gs * exp_stageID | ID) + (1 + VOT_gs * participant.condition * exp_stageID | minimal_pair)
+         theta1 ~ 1
+   Data: df_exposure (Number of observations: 8640) 
+  Draws: 4 chains, each with iter = 4000; warmup = 2000; thin = 1;
+         total post-warmup draws = 8000
+
+Multilevel Hyperparameters:
+~ID (Number of levels: 121) 
+                                                         Estimate Est.Error l-95% CI u-95% CI  Rhat Bulk_ESS Tail_ESS
+sd(mu2_Intercept)                                           1.272     0.129    1.042    1.543 1.002     2057     3594
+sd(mu2_VOT_gs)                                              3.432     0.349    2.803    4.188 1.001     2006     3239
+sd(mu2_exp_stageID2M1)                                      1.063     0.213    0.658    1.507 1.001     2148     3382
+sd(mu2_exp_stageID3M2)                                      0.515     0.191    0.125    0.879 1.001     1644     1575
+sd(mu2_VOT_gs:exp_stageID2M1)                               1.370     0.716    0.084    2.788 1.001     1018     1402
+sd(mu2_VOT_gs:exp_stageID3M2)                               0.986     0.519    0.086    2.052 1.003     2255     2778
+cor(mu2_Intercept,mu2_VOT_gs)                              -0.387     0.106   -0.584   -0.171 1.001     1704     2930
+cor(mu2_Intercept,mu2_exp_stageID2M1)                      -0.213     0.170   -0.529    0.129 1.000     3479     5015
+cor(mu2_VOT_gs,mu2_exp_stageID2M1)                          0.162     0.160   -0.159    0.467 1.000     3049     5025
+cor(mu2_Intercept,mu2_exp_stageID3M2)                      -0.269     0.252   -0.721    0.268 1.001     5062     4835
+cor(mu2_VOT_gs,mu2_exp_stageID3M2)                          0.343     0.230   -0.136    0.751 1.000     4604     4447
+cor(mu2_exp_stageID2M1,mu2_exp_stageID3M2)                  0.341     0.275   -0.243    0.814 1.001     2789     4683
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID2M1)                0.119     0.284   -0.469    0.642 1.001     4843     4284
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID2M1)                  -0.185     0.282   -0.702    0.409 1.000     4725     3544
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID2M1)          -0.334     0.311   -0.805    0.404 1.001     2485     3881
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID2M1)          -0.070     0.334   -0.694    0.580 1.001     2577     4246
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID3M2)               -0.361     0.293   -0.816    0.324 1.000     5487     5479
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID3M2)                  -0.040     0.296   -0.608    0.551 1.000     6343     5435
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)           0.028     0.326   -0.611    0.658 1.001     4820     5543
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID3M2)          -0.003     0.344   -0.641    0.664 1.000     4327     6001
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)    0.015     0.350   -0.637    0.690 1.000     4833     5535
+
+~minimal_pair (Number of levels: 3) 
+                                                                                                           Estimate Est.Error l-95% CI
+sd(mu2_Intercept)                                                                                             2.319     1.398    0.923
+sd(mu2_VOT_gs)                                                                                                1.939     1.549    0.623
+sd(mu2_participant.condition2M1)                                                                              0.847     0.761    0.095
+sd(mu2_participant.condition3M2)                                                                              1.070     1.060    0.084
+sd(mu2_exp_stageID2M1)                                                                                        0.354     0.481    0.008
+sd(mu2_exp_stageID3M2)                                                                                        0.373     0.476    0.010
+sd(mu2_VOT_gs:participant.condition2M1)                                                                       1.637     1.361    0.156
+sd(mu2_VOT_gs:participant.condition3M2)                                                                       2.157     1.696    0.180
+sd(mu2_VOT_gs:exp_stageID2M1)                                                                                 1.053     0.988    0.042
+sd(mu2_VOT_gs:exp_stageID3M2)                                                                                 0.974     1.026    0.037
+sd(mu2_participant.condition2M1:exp_stageID2M1)                                                               0.859     0.927    0.032
+sd(mu2_participant.condition3M2:exp_stageID2M1)                                                               0.613     0.723    0.018
+sd(mu2_participant.condition2M1:exp_stageID3M2)                                                               0.858     0.855    0.034
+sd(mu2_participant.condition3M2:exp_stageID3M2)                                                               0.760     0.824    0.026
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                                        1.203     1.213    0.043
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                                        1.169     1.241    0.040
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                                        1.206     1.209    0.039
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID3M2)                                                        1.684     1.622    0.068
+cor(mu2_Intercept,mu2_VOT_gs)                                                                                 0.019     0.224   -0.410
+cor(mu2_Intercept,mu2_participant.condition2M1)                                                               0.057     0.226   -0.388
+cor(mu2_VOT_gs,mu2_participant.condition2M1)                                                                 -0.017     0.224   -0.450
+cor(mu2_Intercept,mu2_participant.condition3M2)                                                               0.000     0.219   -0.425
+cor(mu2_VOT_gs,mu2_participant.condition3M2)                                                                 -0.058     0.226   -0.489
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2)                                                0.018     0.229   -0.425
+cor(mu2_Intercept,mu2_exp_stageID2M1)                                                                         0.001     0.227   -0.441
+cor(mu2_VOT_gs,mu2_exp_stageID2M1)                                                                            0.002     0.233   -0.442
+cor(mu2_participant.condition2M1,mu2_exp_stageID2M1)                                                          0.004     0.227   -0.437
+cor(mu2_participant.condition3M2,mu2_exp_stageID2M1)                                                          0.004     0.228   -0.442
+cor(mu2_Intercept,mu2_exp_stageID3M2)                                                                         0.009     0.229   -0.441
+cor(mu2_VOT_gs,mu2_exp_stageID3M2)                                                                            0.002     0.233   -0.445
+cor(mu2_participant.condition2M1,mu2_exp_stageID3M2)                                                          0.008     0.232   -0.442
+cor(mu2_participant.condition3M2,mu2_exp_stageID3M2)                                                          0.001     0.235   -0.449
+cor(mu2_exp_stageID2M1,mu2_exp_stageID3M2)                                                                   -0.006     0.236   -0.454
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1)                                                        0.001     0.227   -0.431
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1)                                                           0.070     0.227   -0.368
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1)                                        -0.021     0.222   -0.445
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1)                                        -0.048     0.232   -0.493
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1)                                                   0.003     0.231   -0.446
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1)                                                   0.000     0.230   -0.434
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2)                                                       -0.075     0.226   -0.503
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2)                                                           0.015     0.224   -0.426
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                        -0.052     0.225   -0.485
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2)                                        -0.032     0.225   -0.469
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2)                                                  -0.004     0.225   -0.435
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2)                                                  -0.017     0.229   -0.459
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                  0.015     0.225   -0.416
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID2M1)                                                                  0.006     0.226   -0.431
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID2M1)                                                                    -0.040     0.231   -0.481
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                                   0.016     0.228   -0.423
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                                   0.031     0.227   -0.411
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID2M1)                                                            -0.013     0.232   -0.460
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID2M1)                                                             0.005     0.229   -0.434
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                           -0.036     0.229   -0.473
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                           -0.015     0.229   -0.460
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID3M2)                                                                 -0.033     0.230   -0.478
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID3M2)                                                                    -0.033     0.229   -0.472
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                                  -0.006     0.228   -0.439
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                                   0.020     0.227   -0.418
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                             0.000     0.229   -0.443
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID3M2)                                                            -0.008     0.231   -0.459
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                           -0.028     0.230   -0.467
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                            0.012     0.226   -0.419
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                      0.010     0.230   -0.423
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID2M1)                                                0.042     0.229   -0.409
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID2M1)                                                  -0.015     0.229   -0.455
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                                 0.037     0.230   -0.400
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                                 0.019     0.228   -0.420
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                           0.002     0.234   -0.442
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                           0.005     0.227   -0.433
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                         -0.020     0.230   -0.471
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                         -0.039     0.228   -0.476
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                    0.013     0.229   -0.436
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                   -0.001     0.227   -0.450
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID2M1)                                                0.007     0.227   -0.430
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID2M1)                                                  -0.002     0.226   -0.437
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                                 0.001     0.233   -0.441
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                                 0.001     0.230   -0.446
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                           0.003     0.229   -0.443
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                          -0.002     0.232   -0.456
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                          0.005     0.230   -0.445
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                         -0.003     0.229   -0.448
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                   -0.005     0.229   -0.452
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                   -0.002     0.230   -0.449
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                 -0.005     0.228   -0.443
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID3M2)                                                0.044     0.227   -0.393
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID3M2)                                                   0.027     0.224   -0.407
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                                 0.019     0.230   -0.426
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                                -0.017     0.233   -0.472
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                          -0.001     0.231   -0.445
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                           0.011     0.233   -0.437
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                          0.018     0.228   -0.421
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                         -0.023     0.227   -0.457
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                   -0.005     0.229   -0.443
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                   -0.023     0.231   -0.477
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                  0.004     0.232   -0.447
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                  0.006     0.230   -0.440
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID3M2)                                                0.012     0.226   -0.423
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID3M2)                                                  -0.017     0.227   -0.460
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                                 0.018     0.230   -0.432
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                                 0.015     0.234   -0.436
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                           0.004     0.234   -0.453
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                           0.008     0.232   -0.437
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                         -0.016     0.233   -0.462
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                         -0.019     0.226   -0.467
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                    0.012     0.232   -0.440
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                    0.001     0.230   -0.441
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                  0.010     0.236   -0.447
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                 -0.005     0.231   -0.440
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                 -0.009     0.230   -0.449
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                         0.024     0.230   -0.428
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                            0.008     0.228   -0.428
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                          0.014     0.231   -0.436
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                         -0.006     0.230   -0.445
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                   -0.006     0.232   -0.457
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                    0.002     0.230   -0.437
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                  -0.000     0.229   -0.445
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                  -0.019     0.229   -0.459
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                             0.003     0.233   -0.446
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                            -0.010     0.228   -0.446
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.007     0.227   -0.435
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.002     0.231   -0.461
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.012     0.232   -0.438
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.001     0.230   -0.451
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                        -0.004     0.227   -0.438
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                           -0.011     0.231   -0.450
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                          0.005     0.232   -0.445
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                          0.007     0.232   -0.434
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                   -0.001     0.232   -0.450
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                   -0.004     0.233   -0.448
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                  -0.012     0.230   -0.455
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                   0.001     0.228   -0.446
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                             0.007     0.230   -0.436
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                             0.005     0.232   -0.451
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)          -0.002     0.230   -0.449
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)          -0.011     0.232   -0.450
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)          -0.005     0.231   -0.447
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)           0.002     0.229   -0.435
+cor(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)   -0.009     0.230   -0.457
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                         0.009     0.226   -0.427
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                            0.026     0.231   -0.416
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                         -0.004     0.232   -0.452
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                         -0.019     0.232   -0.479
+                                                                                                           u-95% CI  Rhat Bulk_ESS
+sd(mu2_Intercept)                                                                                             5.856 1.002     3199
+sd(mu2_VOT_gs)                                                                                                5.732 1.002     3299
+sd(mu2_participant.condition2M1)                                                                              2.756 1.001     2893
+sd(mu2_participant.condition3M2)                                                                              3.761 1.001     2341
+sd(mu2_exp_stageID2M1)                                                                                        1.568 1.003     3397
+sd(mu2_exp_stageID3M2)                                                                                        1.642 1.001     3801
+sd(mu2_VOT_gs:participant.condition2M1)                                                                       4.938 1.002     3460
+sd(mu2_VOT_gs:participant.condition3M2)                                                                       6.405 1.001     3531
+sd(mu2_VOT_gs:exp_stageID2M1)                                                                                 3.483 1.001     3503
+sd(mu2_VOT_gs:exp_stageID3M2)                                                                                 3.424 1.000     3781
+sd(mu2_participant.condition2M1:exp_stageID2M1)                                                               3.032 1.000     3095
+sd(mu2_participant.condition3M2:exp_stageID2M1)                                                               2.449 1.000     4892
+sd(mu2_participant.condition2M1:exp_stageID3M2)                                                               3.050 1.000     3469
+sd(mu2_participant.condition3M2:exp_stageID3M2)                                                               2.939 1.001     4483
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                                        4.288 1.001     5198
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                                        4.226 1.000     5376
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                                        4.206 1.001     4588
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID3M2)                                                        5.534 1.001     4751
+cor(mu2_Intercept,mu2_VOT_gs)                                                                                 0.449 1.000     8403
+cor(mu2_Intercept,mu2_participant.condition2M1)                                                               0.488 1.000    10569
+cor(mu2_VOT_gs,mu2_participant.condition2M1)                                                                  0.418 1.000     8527
+cor(mu2_Intercept,mu2_participant.condition3M2)                                                               0.418 1.000     8027
+cor(mu2_VOT_gs,mu2_participant.condition3M2)                                                                  0.384 1.000     8108
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2)                                                0.458 1.000     8632
+cor(mu2_Intercept,mu2_exp_stageID2M1)                                                                         0.434 1.001    10246
+cor(mu2_VOT_gs,mu2_exp_stageID2M1)                                                                            0.455 1.000     8959
+cor(mu2_participant.condition2M1,mu2_exp_stageID2M1)                                                          0.443 1.000     9226
+cor(mu2_participant.condition3M2,mu2_exp_stageID2M1)                                                          0.448 1.001     8964
+cor(mu2_Intercept,mu2_exp_stageID3M2)                                                                         0.437 1.000    10927
+cor(mu2_VOT_gs,mu2_exp_stageID3M2)                                                                            0.457 1.001     8426
+cor(mu2_participant.condition2M1,mu2_exp_stageID3M2)                                                          0.453 1.001     8532
+cor(mu2_participant.condition3M2,mu2_exp_stageID3M2)                                                          0.453 1.000     8215
+cor(mu2_exp_stageID2M1,mu2_exp_stageID3M2)                                                                    0.449 1.000     7541
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1)                                                        0.437 1.000    10486
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1)                                                           0.502 1.000     8977
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1)                                         0.421 1.001     8132
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1)                                         0.401 1.000     7806
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1)                                                   0.449 1.000     6529
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1)                                                   0.445 1.001     7076
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2)                                                        0.375 1.000     9310
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2)                                                           0.453 1.000     8668
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                         0.401 1.001     8634
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2)                                         0.406 1.000     8892
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2)                                                   0.427 1.001     7050
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2)                                                   0.429 1.001     7012
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                  0.446 1.000     6543
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID2M1)                                                                  0.442 1.001    10251
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID2M1)                                                                     0.412 1.000     7887
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                                   0.452 1.000     8931
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                                   0.465 1.001     7772
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID2M1)                                                             0.442 1.000     7858
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID2M1)                                                             0.451 1.000     6991
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                            0.408 1.000     6628
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                            0.431 1.000     6177
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID3M2)                                                                  0.419 1.000    10083
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID3M2)                                                                     0.424 1.000     8475
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                                   0.441 1.000     8966
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                                   0.460 1.000     8313
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                             0.446 1.000     8026
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID3M2)                                                             0.435 1.000     6660
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                            0.424 1.000     6335
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                            0.450 1.000     6397
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                      0.455 1.001     6501
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID2M1)                                                0.483 1.002     8862
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID2M1)                                                   0.430 1.001     9196
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                                 0.484 1.000     8398
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                                 0.454 1.000     8605
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                           0.454 1.000     8086
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                           0.441 1.001     7061
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                          0.422 1.000     6463
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                          0.410 1.000     6480
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                    0.451 1.001     6694
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                    0.436 1.000     5317
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID2M1)                                                0.452 1.000     9775
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID2M1)                                                   0.440 1.000     9722
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                                 0.451 1.000     9352
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                                 0.439 1.000     8134
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                           0.441 1.000     7863
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                           0.445 1.001     8015
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                          0.445 1.001     6863
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                          0.436 1.000     6333
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                    0.437 1.001     5904
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                    0.442 1.000     6216
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                  0.435 1.000     5494
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID3M2)                                                0.476 1.000    10856
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID3M2)                                                   0.455 1.000     9272
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                                 0.458 1.000     8500
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                                 0.434 1.000     8036
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                           0.440 1.000     7798
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                           0.467 1.000     6900
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                          0.452 1.000     6766
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                          0.421 1.000     6373
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                    0.432 1.000     5829
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                    0.428 1.000     5498
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                  0.448 1.000     6019
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                  0.447 1.000     5269
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID3M2)                                                0.450 1.001    10441
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID3M2)                                                   0.416 1.001     9744
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                                 0.467 1.000     8777
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                                 0.466 1.000     9063
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                           0.456 1.000     7664
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                           0.454 1.001     6277
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                          0.438 1.000     6995
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                          0.416 1.001     6440
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                    0.456 1.000     5665
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                    0.447 1.000     5468
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                  0.466 1.000     5740
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                  0.446 1.001     5298
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                  0.441 1.000     5361
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                         0.457 1.000    10141
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                            0.445 1.000    10174
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                          0.462 1.001     9083
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                          0.437 1.000     8575
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                    0.442 1.001     8385
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                    0.446 1.000     6725
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                   0.451 1.001     7030
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                   0.416 1.001     6583
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                             0.451 1.000     6147
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                             0.421 1.000     5978
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.443 1.001     5606
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.453 1.000     5142
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.456 1.000     4869
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)           0.446 1.000     5050
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                         0.434 1.000    11586
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                            0.441 1.000    10753
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                          0.459 1.000     9274
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                          0.463 1.002     9161
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                    0.456 1.000     8102
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                    0.450 1.000     7438
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                   0.435 1.000     6138
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                   0.441 1.000     6458
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                             0.453 1.000     5937
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                             0.455 1.000     5600
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)           0.444 1.000     5029
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)           0.444 1.000     4887
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)           0.438 1.000     4971
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)           0.455 1.001     4819
+cor(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)    0.432 1.000     4844
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                         0.444 1.001    11164
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                            0.469 1.001     8931
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                          0.449 1.000     8732
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                          0.426 1.000     8058
+                                                                                                           Tail_ESS
+sd(mu2_Intercept)                                                                                              3964
+sd(mu2_VOT_gs)                                                                                                 2820
+sd(mu2_participant.condition2M1)                                                                               2488
+sd(mu2_participant.condition3M2)                                                                               2523
+sd(mu2_exp_stageID2M1)                                                                                         3818
+sd(mu2_exp_stageID3M2)                                                                                         4359
+sd(mu2_VOT_gs:participant.condition2M1)                                                                        3109
+sd(mu2_VOT_gs:participant.condition3M2)                                                                        2641
+sd(mu2_VOT_gs:exp_stageID2M1)                                                                                  3178
+sd(mu2_VOT_gs:exp_stageID3M2)                                                                                  3606
+sd(mu2_participant.condition2M1:exp_stageID2M1)                                                                2713
+sd(mu2_participant.condition3M2:exp_stageID2M1)                                                                4207
+sd(mu2_participant.condition2M1:exp_stageID3M2)                                                                3985
+sd(mu2_participant.condition3M2:exp_stageID3M2)                                                                4508
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                                         4286
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                                         4269
+sd(mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                                         3671
+sd(mu2_VOT_gs:participant.condition3M2:exp_stageID3M2)                                                         3338
+cor(mu2_Intercept,mu2_VOT_gs)                                                                                  5558
+cor(mu2_Intercept,mu2_participant.condition2M1)                                                                6357
+cor(mu2_VOT_gs,mu2_participant.condition2M1)                                                                   5844
+cor(mu2_Intercept,mu2_participant.condition3M2)                                                                5728
+cor(mu2_VOT_gs,mu2_participant.condition3M2)                                                                   6109
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2)                                                 6212
+cor(mu2_Intercept,mu2_exp_stageID2M1)                                                                          6330
+cor(mu2_VOT_gs,mu2_exp_stageID2M1)                                                                             6637
+cor(mu2_participant.condition2M1,mu2_exp_stageID2M1)                                                           6223
+cor(mu2_participant.condition3M2,mu2_exp_stageID2M1)                                                           6208
+cor(mu2_Intercept,mu2_exp_stageID3M2)                                                                          6326
+cor(mu2_VOT_gs,mu2_exp_stageID3M2)                                                                             5229
+cor(mu2_participant.condition2M1,mu2_exp_stageID3M2)                                                           6180
+cor(mu2_participant.condition3M2,mu2_exp_stageID3M2)                                                           6174
+cor(mu2_exp_stageID2M1,mu2_exp_stageID3M2)                                                                     6511
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1)                                                         5787
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1)                                                            6254
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1)                                          5811
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1)                                          5803
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1)                                                    5494
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1)                                                    5994
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2)                                                         5987
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2)                                                            5741
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                          5586
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2)                                          6250
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2)                                                    6417
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2)                                                    6174
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2)                                   6451
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID2M1)                                                                   6074
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID2M1)                                                                      6202
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                                    6310
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                                    6568
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID2M1)                                                              5994
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID2M1)                                                              6057
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID2M1)                                             7159
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID2M1)                                             6004
+cor(mu2_Intercept,mu2_VOT_gs:exp_stageID3M2)                                                                   5900
+cor(mu2_VOT_gs,mu2_VOT_gs:exp_stageID3M2)                                                                      6119
+cor(mu2_participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                                    6143
+cor(mu2_participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                                    6076
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                              6010
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:exp_stageID3M2)                                                              6579
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:exp_stageID3M2)                                             6659
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:exp_stageID3M2)                                             6467
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:exp_stageID3M2)                                                       6609
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID2M1)                                                 6080
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID2M1)                                                    5951
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                                  6096
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                                  6271
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                            6321
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                            6051
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID2M1)                           6231
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID2M1)                           5953
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID2M1)                                     6626
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID2M1)                                     6120
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID2M1)                                                 6013
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID2M1)                                                    5990
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                                  6103
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                                  6369
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                            6434
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                            6280
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID2M1)                           6140
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID2M1)                           6154
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                                     6097
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID2M1)                                     6246
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID2M1)                   6380
+cor(mu2_Intercept,mu2_participant.condition2M1:exp_stageID3M2)                                                 6407
+cor(mu2_VOT_gs,mu2_participant.condition2M1:exp_stageID3M2)                                                    6279
+cor(mu2_participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                                  6340
+cor(mu2_participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                                  5964
+cor(mu2_exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                            6625
+cor(mu2_exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                            6173
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition2M1:exp_stageID3M2)                           6245
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition2M1:exp_stageID3M2)                           6529
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                                     6474
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition2M1:exp_stageID3M2)                                     6032
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                   6535
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition2M1:exp_stageID3M2)                   6182
+cor(mu2_Intercept,mu2_participant.condition3M2:exp_stageID3M2)                                                 6247
+cor(mu2_VOT_gs,mu2_participant.condition3M2:exp_stageID3M2)                                                    5899
+cor(mu2_participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                                  6104
+cor(mu2_participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                                  6578
+cor(mu2_exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                            6406
+cor(mu2_exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                            6300
+cor(mu2_VOT_gs:participant.condition2M1,mu2_participant.condition3M2:exp_stageID3M2)                           5968
+cor(mu2_VOT_gs:participant.condition3M2,mu2_participant.condition3M2:exp_stageID3M2)                           6575
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                                     5953
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                                     6279
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                   6714
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_participant.condition3M2:exp_stageID3M2)                   6297
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_participant.condition3M2:exp_stageID3M2)                   6179
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                          5615
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                             6579
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                           6001
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                           6259
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                     6470
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                                     5944
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                    5809
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                    6644
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                              5946
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)                              6573
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)            6371
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)            5907
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)            6122
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID2M1)            6627
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                          6117
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                             6177
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                           6051
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                           6027
+cor(mu2_exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                     6411
+cor(mu2_exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                                     6397
+cor(mu2_VOT_gs:participant.condition2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                    5932
+cor(mu2_VOT_gs:participant.condition3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                    5548
+cor(mu2_VOT_gs:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                              6127
+cor(mu2_VOT_gs:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)                              6499
+cor(mu2_participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)            6524
+cor(mu2_participant.condition3M2:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)            5470
+cor(mu2_participant.condition2M1:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)            5647
+cor(mu2_participant.condition3M2:exp_stageID3M2,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)            5605
+cor(mu2_VOT_gs:participant.condition2M1:exp_stageID2M1,mu2_VOT_gs:participant.condition3M2:exp_stageID2M1)     6149
+cor(mu2_Intercept,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                          5983
+cor(mu2_VOT_gs,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                                             5985
+cor(mu2_participant.condition2M1,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                           5805
+cor(mu2_participant.condition3M2,mu2_VOT_gs:participant.condition2M1:exp_stageID3M2)                           6242
+ [ reached 'max' / getOption("max.print") -- omitted 29 rows ]
+
+Regression Coefficients:
+                                                   Estimate Est.Error l-95% CI u-95% CI  Rhat Bulk_ESS Tail_ESS
+mu2_Intercept                                        -1.848     1.151   -4.193    0.566 1.002     2458     3423
+theta1_Intercept                                     -4.026     0.269   -4.600   -3.552 1.001     4806     5077
+mu2_VOT_gs                                           10.530     1.489    7.776   13.315 1.001     2062     2568
+mu2_participant.condition2M1                         -1.072     0.628   -2.309    0.221 1.001     2429     3838
+mu2_participant.condition3M2                         -2.474     0.850   -3.852   -0.532 1.002     2103     1740
+mu2_exp_stageID2M1                                    0.454     0.355   -0.218    1.128 1.002     3114     3456
+mu2_exp_stageID3M2                                   -0.127     0.319   -0.747    0.538 1.003     3286     2746
+mu2_VOT_gs:participant.condition2M1                   1.409     1.290   -1.208    3.913 1.001     2887     3920
+mu2_VOT_gs:participant.condition3M2                   0.922     1.372   -1.838    3.661 1.001     3575     4880
+mu2_VOT_gs:exp_stageID2M1                            -0.836     0.913   -2.701    0.845 1.001     3391     3974
+mu2_VOT_gs:exp_stageID3M2                             0.268     0.823   -1.329    1.891 1.000     4005     4268
+mu2_participant.condition2M1:exp_stageID2M1          -0.082     0.666   -1.400    1.238 1.001     3398     2783
+mu2_participant.condition3M2:exp_stageID2M1          -1.020     0.654   -2.220    0.346 1.001     3567     4037
+mu2_participant.condition2M1:exp_stageID3M2           0.210     0.650   -1.085    1.483 1.000     3698     3488
+mu2_participant.condition3M2:exp_stageID3M2          -0.102     0.655   -1.417    1.209 1.001     4623     4467
+mu2_VOT_gs:participant.condition2M1:exp_stageID2M1   -0.090     1.211   -2.401    2.370 1.000     4978     5048
+mu2_VOT_gs:participant.condition3M2:exp_stageID2M1    1.350     1.310   -1.310    3.886 1.000     5427     5376
+mu2_VOT_gs:participant.condition2M1:exp_stageID3M2    0.641     1.082   -1.486    2.793 1.000     5952     4825
+mu2_VOT_gs:participant.condition3M2:exp_stageID3M2    0.013     1.322   -2.615    2.688 1.001     5777     5538
+
+Draws were sampled using sampling(NUTS). For each parameter, Bulk_ESS
+and Tail_ESS are effective sample size measures, and Rhat is the potential
+scale reduction factor on split chains (at convergence, Rhat = 1).
