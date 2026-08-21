@@ -491,7 +491,7 @@ fit_exposure <-
 summary(fit_exposure)
 fit_exposure <- readRDS("/Users/willchang/Dropbox/Research/UC Irvine/Research/research projects/Xin/NIH accent adaptation/brms-model-results-rds-files/fit-exposure-brms.rds")
 
-sink("/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/fit-exposure-brms.text")
+sink("/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/fit-exposure-brms.txt")
 print(summary(fit_exposure), digits=3)
 sink()
 
@@ -519,9 +519,40 @@ fit_test <-
 summary(fit_test)
 fit_test <- readRDS("/Users/willchang/Dropbox/Research/UC Irvine/Research/research projects/Xin/NIH accent adaptation/brms-model-results-rds-files/fit-test-brms.rds")
 
-sink("/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/fit-test-brms.text")
+sink("/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/fit-test-brms.txt")
 print(summary(fit_test), digits=3)
 sink()
+
+```
+
+```{r lapse rate for exposure and test blocks, include=FALSE}
+
+#exposure blocks
+exposure_lapse_draws <- fit_exposure %>%
+  spread_draws(b_theta1_Intercept) %>%
+  mutate(lapse_rate = plogis(b_theta1_Intercept))
+
+exposure_lapse_mean_ci <- exposure_lapse_draws %>%
+  summarise(
+    lapse_median = mean(lapse_rate),
+    lapse_lower  = quantile(lapse_rate, 0.025),
+    lapse_upper  = quantile(lapse_rate, 0.975)
+  )
+#mean: 1.81%, 95%-CI: 0.99%-2.79%
+
+
+#test blocks
+test_lapse_draws <- fit_test %>%
+  spread_draws(b_theta1_Intercept) %>%
+  mutate(lapse_rate = plogis(b_theta1_Intercept))
+
+test_lapse_mean_ci <- test_lapse_draws %>%
+  summarise(
+    lapse_median = mean(lapse_rate),
+    lapse_lower  = quantile(lapse_rate, 0.025),
+    lapse_upper  = quantile(lapse_rate, 0.975)
+  )
+#mean: 3.73%, 95%-CI: 2.60%-4.97%
 
 ```
 
@@ -554,6 +585,8 @@ d.exposure_PSE_summary_group <- exposure_pse_draws %>%
     ci_width         = group_PSE_upper - group_PSE_lower,
     .groups = "drop"
   )
+
+write_csv(d.exposure_PSE_summary_group, "/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/d.exposure_PSE_summary_group.csv")
 
 ```
 
@@ -761,8 +794,8 @@ df_target_raw <- df_exposure %>%
     geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray50") +
     facet_wrap(~ ID, scales = "free_x") +
     labs(
-      title = "Atypical Individual Psychometric Curves",
-      subtitle = "Overlaying raw response mean proportions with fitted Bayesian individual curves",
+      #title = "Atypical Individual Psychometric Curves",
+      #subtitle = "Overlaying raw response mean proportions with fitted Bayesian individual curves",
       x = "VOT (ms)",
       y = "Probability of Response",
       color = "Exposure Stage"
@@ -800,6 +833,8 @@ d.test_PSE_summary_group <- test_pse_draws %>%
     ci_width         = group_PSE_upper - group_PSE_lower,
     .groups = "drop"
   )
+
+write_csv(d.test_PSE_summary_group, "/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/d.test_PSE_summary_group.csv")
 
 ```
 
@@ -842,6 +877,7 @@ ggplot(test_curve_summary_group, aes(x = VOT_ms, y = pred_prob, color = particip
   )
 
 ```
+
 ```{r combine curve plots - A}
 
 all_curve_summary <- bind_rows(exposure_curve_summary_group, test_curve_summary_group)
@@ -900,6 +936,7 @@ ggplot(all_curve_grid_B %>% filter(!is.na(exp_stageID)),
   )
 
 ```
+
 ```{r define expected learning in idealized listeners' based on TJ2025, Figure S6}
 
 baseline_prior <- 44.53 #roughly
@@ -942,7 +979,6 @@ pse_test_with_pct.1 <- d.test_PSE_summary_group %>%
     block_type = "Test"
   )
 
-
 pse_combined_with_pct.1 <- bind_rows(pse_exposure_with_pct.1, pse_test_with_pct.1) %>%
   mutate(exp_stageID = factor(exp_stageID, levels = c(
     "Test 1", "Exposure 1", 
@@ -951,6 +987,8 @@ pse_combined_with_pct.1 <- bind_rows(pse_exposure_with_pct.1, pse_test_with_pct.
     "Test 4", "Test 5", "Test 6"
   ))) %>% 
   arrange(participant.condition, exp_stageID)
+
+write_csv(pse_combined_with_pct.1, "/Users/willchang/Desktop/git-repo-will-local/Spanish-DL/results/pse_combined_with_pct.csv")
 
 ```
 
