@@ -1,0 +1,305 @@
+---
+title: "PSE CI noise comparison — Will (Spanish formal) vs. Tan (Experiment 1)"
+format: PDF
+editor: visual
+---
+
+Why the PSE credible interval is wider in the Will analysis than in Tan. A wider PSE CI does **not** by itself mean "noisier data". Because PSE = −intercept/slope, its uncertainty behaves roughly like
+
+$$\text{SE(PSE)} \;\propto\; \frac{1}{\text{slope}} \times \frac{\text{per-trial noise}}{\sqrt{N_{\text{per estimate}}}},$$
+
+so a wider interval can come from (1) a **shallower slope**, (2) **fewer trials per PSE estimate** (the Will PSE is estimated *per condition × stage cell*, Tan pools all trials), or (3) **more per-trial lapsing** — the only one of the three that is genuinely "noisier data". This document puts both datasets on the same footing (raw VOT in ms, the shared VOT window, per participant) and measures all three so the wider CI can be attributed correctly.
+
+```{r setup, message=FALSE, warning=FALSE}
+# --- libraries (mean_cl_boot needs Hmisc *installed*, not loaded) ---
+require(tidyverse)
+require(magrittr)
+
+# --- shared palette: same dataset reads as the same colour in every figure ---
+colours.dataset <- c("Tan" = "#333333", "Will" = "#1E88E5")
+
+# --- the VOT range (ms) the two experiments actually share ---
+VOT.window <- c(-5, 70)
+```
+
+## Step 0a — Load and rebuild the Tan frame
+
+Read the Tan CSV, drop participants who failed the catch trials, trim within-participant RT outliers, keep only real (non-catch) trials, and code the response as 1 = "t". This mirrors the exclusion block in `section2experiment1.Rmd` and ends in `d.test.excluded`.
+
+```{r load-tan, message=FALSE, warning=FALSE}
+# --- load Tan (Experiment 1) trials ---
+d.test.exp1.raw <- read_csv("../dataTan2025/data/d.test.Exp1.csv", show_col_types = FALSE)
+
+# --- flag catch trials and mark participants who failed too many (<10 of 12 correct) ---
+d.test.exp1.flagged <- d.test.exp1.raw |>
+  mutate(
+    is.catch.trial = Item.ExpectedResponse %in% c("flare", "rare", "share"),
+    catch.correct  = if_else(is.catch.trial, Item.MinimalPair == Response, NA)
+  ) |>
+  group_by(ParticipantID) |>
+  mutate(excluded.by.catch = sum(catch.correct, na.rm = TRUE) < 10) |>
+  ungroup()
+
+# --- within-participant RT trim (|z of log10 RT| > 3), then keep real trials, code response ---
+d.test.excluded <- d.test.exp1.flagged |>
+  filter(!excluded.by.catch) |>
+  group_by(ParticipantID) |>
+  mutate(
+    log.RT   = log10(if_else(Response.RT <= 0, NA_real_, Response.RT)),
+    log.RT.z = as.numeric(scale(log.RT))
+  ) |>
+  ungroup() |>
+  filter(!is.catch.trial, is.na(log.RT.z) | abs(log.RT.z) <= 3) |>
+  mutate(resp.num = if_else(Response.Voicing == "voiceless", 1, 0))
+
+# sanity check: participants retained (~21) and response is clean 0/1
+n_distinct(d.test.excluded$ParticipantID)
+stopifnot(all(d.test.excluded$resp.num %in% c(0, 1)))
+```
+
+## Step 0b — Load and rebuild the Will test frame
+
+Read the preprocessed Will CSV, apply the four participant-level exclusions and the trial-level RT trim from `formal-analysis-brms.qmd`, derive `exp_stageID` from per-participant block order, and keep the test blocks. Ends in `df_test`.
+
+```{r load-will, message=FALSE, warning=FALSE}
+# --- load preprocessed Will data (resp.num, VOT, participant.condition already present) ---
+d.formal.raw <- read_csv("../data/formal/formal-full-data-preprocessed.csv", show_col_types = FALSE) |>
+  rename(label_type = `Spreadsheet..label`) |>
+  mutate(rt.log = log(rt))
+
+# --- participant-level exclusions: low catch acc, low labelled acc, too many NAs, outlier mean RT ---
+ids.excluded <- {
+  low.catch <- d.formal.raw |>
+    filter(trial_type == "catch") |>
+    group_by(ID) |>
+    summarise(accuracy = mean(word == Response), .groups = "drop") |>
+    filter(accuracy < 0.83) |> pull(ID)
+
+  low.labelled <- d.formal.raw |>
+    filter(label_type == "labeled") |>
+    group_by(ID) |>
+    summarise(accuracy = mean(word == Response), .groups = "drop") |>
+    filter(accuracy < 0.94) |> pull(ID)
+
+  high.na <- d.formal.raw |>
+    filter(trial_type != "catch", is.na(resp.num)) |>
+    count(ID) |> filter(n > 21) |> pull(ID)
+
+  outlier.rt <- d.formal.raw |>
+    filter(trial_type != "catch") |>
+    group_by(ID) |>
+    summarise(mean.rt.log = mean(rt.log, na.rm = TRUE), .groups = "drop") |>
+    mutate(z = as.numeric(scale(mean.rt.log))) |>
+    filter(abs(z) > 3) |> pull(ID)
+
+  unique(c(low.catch, low.labelled, high.na, outlier.rt))
+}
+
+# --- trial-level RT trim, derive experiment stage from block order, keep test blocks ---
+stage.labels <- c("Test 1", "Exposure 1", "Test 2", "Exposure 2",
+                  "Test 3", "Exposure 3", "Test 4", "Test 5", "Test 6")
+
+df_test <- d.formal.raw |>
+  filter(!ID %in% ids.excluded, trial_type != "catch", !is.na(resp.num)) |>
+  group_by(ID) |>
+  mutate(
+    within.rt.log.z = as.numeric(scale(rt.log)),
+    exp_stageID     = stage.labels[match(blockID, unique(blockID))]
+  ) |>
+  ungroup() |>
+  filter(abs(within.rt.log.z) <= 3, str_detect(exp_stageID, "Test"))
+
+# sanity check: retained participants (~121) and only test stages remain
+n_distinct(df_test$ID)
+count(df_test, exp_stageID)
+```
+
+## Step 1 — Standardize both datasets into one long frame
+
+Collapse each to a common schema (`dataset`, `participant`, `VOT.ms`, `resp.t`) and stack them, so every diagnostic downstream is one grouped pipeline instead of two parallel ones.
+
+```{r standardize}
+# --- common schema for the Will test trials ---
+d.formal.long <- df_test |>
+  transmute(
+    dataset     = "Will",
+    participant = as.character(ID),
+    VOT.ms      = VOT,
+    resp.t      = resp.num
+  )
+
+# --- common schema for the Tan trials ---
+d.exp1.long <- d.test.excluded |>
+  ungroup() |>
+  transmute(
+    dataset     = "Tan",
+    participant = as.character(ParticipantID),
+    VOT.ms      = Item.VOT,
+    resp.t      = resp.num
+  )
+
+d.compare <- bind_rows(d.formal.long, d.exp1.long) |>
+  filter(!is.na(resp.t))
+
+# sanity check: both datasets present, and the trial-count asymmetry is visible up front
+d.compare |> count(dataset)
+stopifnot(all(d.compare$resp.t %in% c(0, 1)))
+```
+
+## Step 2 — Clip to the shared VOT window
+
+Tan spans −100–130 ms with clear endpoints; the Will test blocks only span −5–70. Comparing on the overlap removes stimulus range as a confound, so any slope difference is about *responding*, not about how much leverage the stimuli give.
+
+```{r clip-window}
+# --- restrict to the VOT range both experiments share ---
+d.compare.windowed <- d.compare |>
+  filter(VOT.ms >= VOT.window[1], VOT.ms <= VOT.window[2])
+
+# sanity check: ranges now match across datasets
+d.compare.windowed |>
+  group_by(dataset) |>
+  summarise(VOT.min = min(VOT.ms), VOT.max = max(VOT.ms), n.trials = n())
+```
+
+## Step 3 — Per-subject slope and determinacy
+
+For each participant, fit a tiny logistic `resp.t ~ VOT.ms` and pull the **slope** (sensitivity to VOT — the quantity that directly controls PSE precision) and **McFadden's pseudo-R²** (how deterministic the listener's responses are given VOT). Shallower slopes *and* lower pseudo-R² in one dataset are direct evidence of noisier categorization.
+
+```{r per-subject-fits, warning=FALSE}
+# --- fit one subject's psychometric slope + determinacy; returns a 1-row tibble ---
+fit_subject_psychometrics <- function(subject.trials) {
+  fit.attempt <- tryCatch(
+    glm(resp.t ~ VOT.ms, family = binomial, data = subject.trials),
+    error = function(e) NULL, warning = function(w) NULL
+  )
+  if (is.null(fit.attempt)) {
+    return(tibble(slope = NA_real_, pseudo.R2 = NA_real_, n.trials = nrow(subject.trials)))
+  }
+  tibble(
+    slope     = coef(fit.attempt)[["VOT.ms"]],
+    pseudo.R2 = 1 - (fit.attempt$deviance / fit.attempt$null.deviance),   # McFadden
+    n.trials  = nrow(subject.trials)
+  )
+}
+
+# --- apply per participant within each dataset ---
+d.subject.fits <- d.compare.windowed |>
+  group_by(dataset, participant) |>
+  group_modify(~ fit_subject_psychometrics(.x)) |>
+  ungroup()
+
+# sanity check: median + spread of slope and determinacy per dataset
+d.subject.fits |>
+  group_by(dataset) |>
+  summarise(across(c(slope, pseudo.R2), list(median = ~median(.x, na.rm = TRUE),
+                                             IQR = ~IQR(.x, na.rm = TRUE))))
+```
+
+## Step 4 — Endpoint lapsiness
+
+The most assumption-free noise signal: at the clearest tokens (lowest/highest VOT in the window) an attentive listener answers ≈0 and ≈1. Plateaus that fall short of 0/1 are lapsing/inattention — "noisier data" in the most literal sense, and the source of a higher fitted lapse rate.
+
+```{r endpoints}
+# --- mean response at the clearest low- and high-VOT tokens, per participant ---
+d.endpoints <- d.compare.windowed |>
+  group_by(dataset) |>
+  mutate(vot.lo = quantile(VOT.ms, 0.15), vot.hi = quantile(VOT.ms, 0.85)) |>
+  ungroup() |>
+  mutate(
+    endpoint = case_when(
+      VOT.ms <= vot.lo ~ "clear_d",
+      VOT.ms >= vot.hi ~ "clear_t",
+      TRUE             ~ NA_character_
+    )
+  ) |>
+  filter(!is.na(endpoint)) |>
+  group_by(dataset, participant, endpoint) |>
+  summarise(mean.resp.t = mean(resp.t), .groups = "drop")
+
+# how far the plateaus fall short of 0 / 1 in each dataset
+d.endpoints |>
+  group_by(dataset, endpoint) |>
+  summarise(mean.plateau = mean(mean.resp.t), .groups = "drop")
+```
+
+## Step 5 — Trials per PSE estimate (rule out the confound)
+
+Before concluding "noisier", confirm the two PSEs aren't just built on different amounts of data. Count trials per participant in Tan vs. per participant × condition × stage **cell** in the Will set — the unit each Will PSE is actually estimated from.
+
+```{r trials-per-estimate}
+# --- how many trials inform ONE PSE estimate in each analysis ---
+trials.per.exp1.estimate <- d.exp1.long |>
+  count(participant, name = "n.trials")
+
+trials.per.formal.estimate <- df_test |>
+  count(ID, exp_stageID, participant.condition, name = "n.trials")
+
+tibble(
+  analysis            = c("Tan (per participant)", "Will (per participant x stage x condition)"),
+  median.trials       = c(median(trials.per.exp1.estimate$n.trials),
+                          median(trials.per.formal.estimate$n.trials))
+)
+```
+
+## Step 6 — Compare visually
+
+Two figures settle it: the distribution of per-subject slopes and the endpoint plateaus, both coloured by dataset with the shared palette.
+
+```{r plot-slopes, warning=FALSE, message=FALSE}
+#| fig-cap: "Per-participant categorization slopes (logistic resp ~ VOT in ms, fit within the shared -5 to 70 ms window) for Tan (grey) and the Will test blocks (blue). Each faint point is one participant; the solid point-range is the bootstrapped 95% CI of the mean slope across participants. Shallower and/or more dispersed slopes indicate noisier, less VOT-driven responding, which is the direct cause of wider PSE intervals."
+plot.slope.distribution <- d.subject.fits |>
+  ggplot(aes(x = dataset, y = slope, colour = dataset)) +
+  geom_jitter(width = 0.12, alpha = 0.5) +
+  stat_summary(fun.data = mean_cl_boot, geom = "pointrange", linewidth = 0.9) +
+  scale_colour_manual(values = colours.dataset) +
+  labs(x = NULL, y = "Per-participant logistic slope (per ms VOT)") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+plot.slope.distribution
+```
+
+```{r plot-endpoints, warning=FALSE, message=FALSE}
+#| fig-cap: "Response plateaus at the clearest tokens, per participant, by dataset. Left facet: mean proportion of 't' at the lowest-VOT (clear /d/) tokens, which should sit near 0. Right facet: mean proportion at the highest-VOT (clear /t/) tokens, which should sit near 1. Each faint point is one participant; the solid point-range is the bootstrapped 95% CI of the mean across participants. Plateaus further from 0/1 indicate more lapsing/inattention, i.e. genuinely noisier data."
+plot.endpoint.lapsiness <- d.endpoints |>
+  mutate(endpoint = recode(endpoint, clear_d = "clear /d/ (expect ~0)",
+                                       clear_t = "clear /t/ (expect ~1)")) |>
+  ggplot(aes(x = dataset, y = mean.resp.t, colour = dataset)) +
+  geom_jitter(width = 0.12, alpha = 0.5) +
+  stat_summary(fun.data = mean_cl_boot, geom = "pointrange", linewidth = 0.9) +
+  geom_hline(yintercept = c(0, 1), linetype = "dashed", colour = "grey60") +
+  scale_colour_manual(values = colours.dataset) +
+  facet_wrap(~ endpoint) +
+  labs(x = NULL, y = "Mean proportion 't' at clearest tokens") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+plot.endpoint.lapsiness
+```
+
+## Verdict — read the numbers jointly
+
+```{r verdict-table}
+# --- assemble the three CI drivers into one table for a side-by-side read ---
+summary.slope <- d.subject.fits |>
+  group_by(dataset) |>
+  summarise(median.slope = median(slope, na.rm = TRUE),
+            median.pseudo.R2 = median(pseudo.R2, na.rm = TRUE), .groups = "drop")
+
+summary.endpoints <- d.endpoints |>
+  group_by(dataset, endpoint) |>
+  summarise(plateau = mean(mean.resp.t), .groups = "drop") |>
+  pivot_wider(names_from = endpoint, values_from = plateau)
+
+summary.trials <- tibble(
+  dataset = c("Tan", "Will"),
+  median.trials.per.estimate = c(median(trials.per.exp1.estimate$n.trials),
+                                 median(trials.per.formal.estimate$n.trials))
+)
+
+summary.slope |>
+  left_join(summary.endpoints, by = "dataset") |>
+  left_join(summary.trials, by = "dataset")
+```
+
+Interpretation. **Shallower slope + lower pseudo-R² + endpoint plateaus further from 0/1**, with **comparable trials per estimate**, is a clean verdict that the Will data are genuinely noisier. If instead slope, pseudo-R², and endpoints look similar and only **trials-per-estimate** differs, the wider CI is a design artifact (the Will PSE stands on far less data per cell), not noise.
